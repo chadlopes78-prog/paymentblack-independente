@@ -4,19 +4,14 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
-  HeadContent,
-  Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
 import { subscribeToPushNotifications } from "../lib/push-notifications";
 
-import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "../components/ui/sonner";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ThemeProvider } from "../components/ThemeProvider";
-
-const themeInitScript = `(function(){try{var t=localStorage.getItem('pb-theme');if(!t){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}if(t==='dark'){document.documentElement.classList.add('dark');}document.documentElement.style.colorScheme=t;}catch(e){}})();`;
 
 function NotFoundComponent() {
   return (
@@ -79,72 +74,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Paymentblack Mozambique | Plataforma de Pagamentos" },
-      { name: "description", content: "A plataforma de pagamentos e checkout mais completa para Moçambique. Aceite M-Pesa e e-Mola." },
-
-      { name: "author", content: "Paymentblack" },
-      { property: "og:title", content: "Paymentblack Mozambique | Plataforma de Pagamentos" },
-      { property: "og:description", content: "A plataforma de pagamentos e checkout mais completa para Moçambique. Aceite M-Pesa e e-Mola." },
-
-
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@PaymentBlackMZ" },
-      { name: "twitter:title", content: "Paymentblack Mozambique | Plataforma de Pagamentos" },
-      { name: "twitter:description", content: "A plataforma de pagamentos e checkout mais completa para Moçambique. Aceite M-Pesa e e-Mola." },
-
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/4f30b18f-4006-44c5-aa69-aa14f7bc9f00/id-preview-0f09bcce--4fb7a44a-76ae-40f5-b7af-384c8a31cb3b.lovable.app-1780562490496.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/4f30b18f-4006-44c5-aa69-aa14f7bc9f00/id-preview-0f09bcce--4fb7a44a-76ae-40f5-b7af-384c8a31cb3b.lovable.app-1780562490496.png" },
-    ],
-    links: [
-      { rel: "preconnect", href: "https://wdhiralaekjeucbxudyf.supabase.co" },
-      { rel: "preconnect", href: "https://connect.facebook.net" },
-
-
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-      {
-        rel: "manifest",
-        href: "/manifest.json",
-      },
-      {
-        rel: "icon",
-        type: "image/png",
-        href: "/favicon.ico",
-      },
-      {
-        rel: "apple-touch-icon",
-        href: "/logo-192.png",
-      },
-
-    ],
-  }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
-
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
