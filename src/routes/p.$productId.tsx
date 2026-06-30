@@ -133,8 +133,8 @@ export const Route = createFileRoute("/p/$productId")({
 
 function CheckoutSkeleton() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
-      <div className="mx-auto max-w-[440px] px-3 py-3 sm:py-5">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100">
+      <div className="mx-auto w-full max-w-[460px] px-3 py-4 sm:px-4 sm:py-6">
         <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-200/60 overflow-hidden animate-pulse">
           <div className="p-4 flex gap-3 items-center border-b border-slate-100">
             <div className="h-14 w-14 bg-slate-200 rounded-xl" />
@@ -481,22 +481,22 @@ function CheckoutPage() {
   const accent = paymentMethod === "mpesa" ? "#E30613" : "#F97316";
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
-      <div className="mx-auto max-w-[440px] px-3 py-3 sm:py-5">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100">
+      <div className="mx-auto w-full max-w-[460px] px-3 py-4 sm:px-4 sm:py-6">
         {/* Top countdown banner */}
-        <div className="bg-red-600 text-white rounded-xl mb-2 px-3 py-2 flex items-center justify-center gap-2 shadow-sm">
-          <Clock className="h-4 w-4" />
-          <span className="text-xs font-bold uppercase tracking-wide">Essa oferta expira em</span>
-          <span className="text-sm font-black tabular-nums bg-white/15 px-2 py-0.5 rounded-md animate-pulse">
+        <div className="bg-gradient-to-r from-red-600 to-red-500 text-white rounded-2xl mb-3 px-3.5 py-2.5 flex items-center justify-center gap-2 shadow-[0_4px_14px_-2px_rgba(220,38,38,0.45)]">
+          <Clock className="h-4 w-4 flex-shrink-0" />
+          <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wide truncate">Essa oferta expira em</span>
+          <span className="text-sm font-black tabular-nums bg-white/20 px-2.5 py-1 rounded-lg animate-pulse flex-shrink-0">
             {formatTime(timeLeft)}
           </span>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-slate-200/60 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.07)] border border-slate-200/60 overflow-hidden">
           {/* Header: product + price */}
-          <div className="p-4 flex gap-3 items-center border-b border-slate-100">
-            <div className="h-14 w-14 bg-slate-100 rounded-xl overflow-hidden flex-shrink-0 ring-1 ring-slate-200/60">
+          <div className="p-4 sm:p-5 flex gap-3 items-center border-b border-slate-100">
+            <div className="h-14 w-14 sm:h-16 sm:w-16 bg-slate-100 rounded-xl overflow-hidden flex-shrink-0 ring-1 ring-slate-200/60">
               {product.image_url ? (
                 <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" loading="eager" decoding="async" />
               ) : (
@@ -506,9 +506,9 @@ function CheckoutPage() {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-sm font-semibold text-slate-900 leading-tight truncate">{product.name}</h1>
-              <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="text-2xl font-black text-slate-900 tracking-tight tabular-nums">
+              <h1 className="text-sm sm:text-base font-semibold text-slate-900 leading-tight truncate">{product.name}</h1>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight tabular-nums">
                   {(Number(product.price) + (bumpAccepted && product.bump_enabled && product.bump_price ? Number(product.bump_price) : 0)).toLocaleString("pt-MZ")}
                 </span>
                 <span className="text-xs font-semibold text-slate-500">MT</span>
@@ -518,7 +518,7 @@ function CheckoutPage() {
 
           {/* Optional banner */}
           {product.checkout_banner_url && (
-            <div className="px-4 pt-3">
+            <div className="px-4 sm:px-5 pt-3.5">
               <img
                 src={product.checkout_banner_url}
                 alt="Oferta"
@@ -529,7 +529,7 @@ function CheckoutPage() {
             </div>
           )}
 
-          <form onSubmit={handlePayment} className="p-4 space-y-3">
+          <form onSubmit={handlePayment} className="p-4 sm:p-5 space-y-4">
             {/* Buyer info */}
             <div className="space-y-2">
               <Input
@@ -558,43 +558,48 @@ function CheckoutPage() {
             </div>
 
             {/* Method selector */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => { setPaymentMethod("mpesa"); setPhone(""); }}
-                className={cn(
-                  "relative flex items-center gap-2 p-2.5 rounded-xl border-2 transition-all bg-white",
-                  paymentMethod === "mpesa"
-                    ? "border-[#E30613] shadow-[0_0_0_3px_rgba(227,6,19,0.08)]"
-                    : "border-slate-200 hover:border-slate-300",
-                )}
-              >
-                <div className="h-9 w-9 rounded-lg overflow-hidden flex-shrink-0">
-                  <img src="/mpesa-logo.jpg" className="h-full w-full object-cover" alt="M-Pesa" loading="lazy" />
-                </div>
-                <span className="text-sm font-bold text-slate-900">M-Pesa</span>
-                {paymentMethod === "mpesa" && (
-                  <CheckCircle2 className="absolute top-1.5 right-1.5 h-3.5 w-3.5 text-[#E30613] fill-white" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setPaymentMethod("emola"); setPhone(""); }}
-                className={cn(
-                  "relative flex items-center gap-2 p-2.5 rounded-xl border-2 transition-all bg-white",
-                  paymentMethod === "emola"
-                    ? "border-orange-500 shadow-[0_0_0_3px_rgba(249,115,22,0.1)]"
-                    : "border-slate-200 hover:border-slate-300",
-                )}
-              >
-                <div className="h-9 w-9 rounded-lg overflow-hidden flex-shrink-0">
-                  <img src="/emola-logo.jpg" className="h-full w-full object-cover" alt="e-Mola" loading="lazy" />
-                </div>
-                <span className="text-sm font-bold text-slate-900">e-Mola</span>
-                {paymentMethod === "emola" && (
-                  <CheckCircle2 className="absolute top-1.5 right-1.5 h-3.5 w-3.5 text-orange-500 fill-white" />
-                )}
-              </button>
+            <div className="space-y-2 pt-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Método de Pagamento
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setPaymentMethod("mpesa"); setPhone(""); }}
+                  className={cn(
+                    "relative flex items-center gap-2 p-2.5 sm:p-3 rounded-xl border-2 transition-all bg-white",
+                    paymentMethod === "mpesa"
+                      ? "border-[#E30613] shadow-[0_0_0_3px_rgba(227,6,19,0.08)]"
+                      : "border-slate-200 hover:border-slate-300",
+                  )}
+                >
+                  <div className="h-9 w-9 rounded-lg overflow-hidden flex-shrink-0">
+                    <img src="/mpesa-logo.jpg" className="h-full w-full object-cover" alt="M-Pesa" loading="lazy" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-900">M-Pesa</span>
+                  {paymentMethod === "mpesa" && (
+                    <CheckCircle2 className="absolute top-1.5 right-1.5 h-3.5 w-3.5 text-[#E30613] fill-white" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPaymentMethod("emola"); setPhone(""); }}
+                  className={cn(
+                    "relative flex items-center gap-2 p-2.5 sm:p-3 rounded-xl border-2 transition-all bg-white",
+                    paymentMethod === "emola"
+                      ? "border-orange-500 shadow-[0_0_0_3px_rgba(249,115,22,0.1)]"
+                      : "border-slate-200 hover:border-slate-300",
+                  )}
+                >
+                  <div className="h-9 w-9 rounded-lg overflow-hidden flex-shrink-0">
+                    <img src="/emola-logo.jpg" className="h-full w-full object-cover" alt="e-Mola" loading="lazy" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-900">e-Mola</span>
+                  {paymentMethod === "emola" && (
+                    <CheckCircle2 className="absolute top-1.5 right-1.5 h-3.5 w-3.5 text-orange-500 fill-white" />
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Payment number */}
@@ -726,7 +731,7 @@ function CheckoutPage() {
                   ? Number(product.bump_price)
                   : 0);
               return (
-                <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5">
+                <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-3">
                   <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
                     Total a pagar
                   </span>
@@ -760,6 +765,13 @@ function CheckoutPage() {
                 </>
               )}
             </Button>
+
+            <div className="flex items-center justify-center gap-1.5 pt-1">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
+              <span className="text-[11px] font-medium text-slate-500">
+                Pagamento 100% seguro via M-Pesa e e-Mola
+              </span>
+            </div>
 
           </form>
         </div>
