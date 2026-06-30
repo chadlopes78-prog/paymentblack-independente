@@ -4,7 +4,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const PUBLIC_COLUMNS =
-  "id, user_id, name, description, price, image_url, checkout_banner_url, category, status, custom_url, warranty_days, delivery_type, facebook_pixel_id, bump_enabled, bump_title, bump_description, bump_price, bump_image_url, bump_button_text, bump_highlight_color";
+  "id, user_id, name, description, price, image_url, checkout_banner_url, category, status, custom_url, warranty_days, delivery_type, facebook_pixel_id, bump_enabled, bump_title, bump_description, bump_price, bump_image_url, bump_button_text, bump_highlight_color, checkout_banner_type, checkout_banner_video_url, timer_enabled";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

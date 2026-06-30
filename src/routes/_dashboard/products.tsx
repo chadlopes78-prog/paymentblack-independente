@@ -76,6 +76,10 @@ interface FormState {
   imageUrl: string;
   bannerFile: File | null;
   bannerUrl: string;
+  bannerType: "image" | "video";
+  bannerVideoFile: File | null;
+  bannerVideoUrl: string;
+  timerEnabled: boolean;
   bumpEnabled: boolean;
   bumpTitle: string;
   bumpDescription: string;
@@ -102,6 +106,9 @@ interface FormSetters {
   setDeliveryFile: (v: File | null) => void;
   setImageFile: (v: File | null) => void;
   setBannerFile: (v: File | null) => void;
+  setBannerType: (v: "image" | "video") => void;
+  setBannerVideoFile: (v: File | null) => void;
+  setTimerEnabled: (v: boolean) => void;
   setBumpEnabled: (v: boolean) => void;
   setBumpTitle: (v: string) => void;
   setBumpDescription: (v: string) => void;
@@ -199,6 +206,13 @@ function ProductFormFields({ form, set, prefix = "" }: { form: FormState; set: F
             className={cn(form.thankYouUrl && /^https?:\/\//i.test(form.thankYouUrl) ? "border-emerald-400" : form.thankYouUrl ? "border-rose-400" : "")}
           />
         </div>
+        <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <div>
+            <p className="font-bold text-sm text-slate-800">Cronômetro de oferta</p>
+            <p className="text-[10px] text-slate-400">Exibe a contagem regressiva no topo do checkout deste produto</p>
+          </div>
+          <Switch checked={form.timerEnabled} onCheckedChange={(v) => set.setTimerEnabled(v)} />
+        </div>
       </TabsContent>
 
       {/* Imagens */}
@@ -229,24 +243,79 @@ function ProductFormFields({ form, set, prefix = "" }: { form: FormState; set: F
         <div className="border-t pt-4 grid gap-3">
           <div>
             <Label className="font-semibold">Banner do Checkout</Label>
-            <p className="text-[10px] text-slate-400 mt-0.5">Aparece no topo do checkout.</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Aparece no topo do checkout. Escolha imagem ou vídeo.</p>
           </div>
-          <Input
-            id={`${prefix}banner`}
-            type="file"
-            accept="image/*"
-            onChange={(e) => set.setBannerFile(e.target.files?.[0] || null)}
-            className="cursor-pointer"
-          />
-          {(form.bannerFile || form.bannerUrl) && (
-            <div className="relative">
-              <img
-                src={form.bannerFile ? URL.createObjectURL(form.bannerFile) : form.bannerUrl}
-                alt="Preview banner"
-                className="w-full h-auto rounded-xl border-2 border-slate-200 shadow-sm"
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => set.setBannerType("image")}
+              className={cn(
+                "flex-1 h-9 rounded-lg border text-xs font-bold transition-colors",
+                form.bannerType === "image"
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300",
+              )}
+            >
+              Imagem
+            </button>
+            <button
+              type="button"
+              onClick={() => set.setBannerType("video")}
+              className={cn(
+                "flex-1 h-9 rounded-lg border text-xs font-bold transition-colors",
+                form.bannerType === "video"
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300",
+              )}
+            >
+              Vídeo
+            </button>
+          </div>
+
+          {form.bannerType === "image" ? (
+            <>
+              <Input
+                id={`${prefix}banner`}
+                type="file"
+                accept="image/*"
+                onChange={(e) => set.setBannerFile(e.target.files?.[0] || null)}
+                className="cursor-pointer"
               />
-              <Badge className="absolute top-2 right-2 text-[9px] bg-emerald-500">Preview</Badge>
-            </div>
+              {(form.bannerFile || form.bannerUrl) && (
+                <div className="relative">
+                  <img
+                    src={form.bannerFile ? URL.createObjectURL(form.bannerFile) : form.bannerUrl}
+                    alt="Preview banner"
+                    className="w-full h-auto rounded-xl border-2 border-slate-200 shadow-sm"
+                  />
+                  <Badge className="absolute top-2 right-2 text-[9px] bg-emerald-500">Preview</Badge>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <Input
+                id={`${prefix}banner_video`}
+                type="file"
+                accept="video/*"
+                onChange={(e) => set.setBannerVideoFile(e.target.files?.[0] || null)}
+                className="cursor-pointer"
+              />
+              <p className="text-[10px] text-slate-400 -mt-1">Formatos recomendados: MP4 ou WebM, idealmente leve (até ~15MB) para carregar rápido no celular.</p>
+              {(form.bannerVideoFile || form.bannerVideoUrl) && (
+                <div className="relative">
+                  <video
+                    src={form.bannerVideoFile ? URL.createObjectURL(form.bannerVideoFile) : form.bannerVideoUrl}
+                    className="w-full h-auto rounded-xl border-2 border-slate-200 shadow-sm bg-black"
+                    controls
+                    muted
+                    playsInline
+                  />
+                  <Badge className="absolute top-2 right-2 text-[9px] bg-emerald-500">Preview</Badge>
+                </div>
+              )}
+            </>
           )}
         </div>
       </TabsContent>
@@ -390,6 +459,10 @@ function ProductsPage() {
   const [imageUrl, setImageUrl] = useState<string>("");
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string>("");
+  const [bannerType, setBannerType] = useState<"image" | "video">("image");
+  const [bannerVideoFile, setBannerVideoFile] = useState<File | null>(null);
+  const [bannerVideoUrl, setBannerVideoUrl] = useState<string>("");
+  const [timerEnabled, setTimerEnabled] = useState(true);
   const [bumpEnabled, setBumpEnabled] = useState(false);
   const [bumpTitle, setBumpTitle] = useState("");
   const [bumpDescription, setBumpDescription] = useState("");
@@ -403,7 +476,8 @@ function ProductsPage() {
     name, description, price, category, supportPhone, supportNumber,
     facebookPixelId, facebookAccessToken, deliveryType, deliveryLink,
     accessLink, thankYouButtonText, thankYouUrl, deliveryFile, imageFile,
-    imageUrl, bannerFile, bannerUrl, bumpEnabled, bumpTitle, bumpDescription,
+    imageUrl, bannerFile, bannerUrl, bannerType, bannerVideoFile, bannerVideoUrl,
+    timerEnabled, bumpEnabled, bumpTitle, bumpDescription,
     bumpPrice, bumpButtonText, bumpHighlightColor, bumpImageFile, bumpImageUrl,
   };
 
@@ -411,7 +485,8 @@ function ProductsPage() {
     setName, setDescription, setPrice, setCategory, setSupportPhone,
     setFacebookPixelId, setFacebookAccessToken, setDeliveryType, setDeliveryLink,
     setAccessLink, setThankYouButtonText, setThankYouUrl, setDeliveryFile,
-    setImageFile, setBannerFile, setBumpEnabled, setBumpTitle, setBumpDescription,
+    setImageFile, setBannerFile, setBannerType, setBannerVideoFile, setTimerEnabled,
+    setBumpEnabled, setBumpTitle, setBumpDescription,
     setBumpPrice, setBumpButtonText, setBumpHighlightColor, setBumpImageFile,
   };
 
@@ -451,7 +526,9 @@ function ProductsPage() {
     setDeliveryType("none"); setDeliveryLink(""); setAccessLink("");
     setThankYouButtonText("Liberar acesso"); setThankYouUrl("");
     setDeliveryFile(null); setImageFile(null); setImageUrl("");
-    setBannerFile(null); setBannerUrl(""); setBumpEnabled(false);
+    setBannerFile(null); setBannerUrl(""); setBannerType("image");
+    setBannerVideoFile(null); setBannerVideoUrl(""); setTimerEnabled(true);
+    setBumpEnabled(false);
     setBumpTitle(""); setBumpDescription(""); setBumpPrice("");
     setBumpButtonText("Sim, quero adicionar!"); setBumpHighlightColor("#16a34a");
     setBumpImageFile(null); setBumpImageUrl("");
@@ -479,6 +556,8 @@ function ProductsPage() {
       if (imageFile) uploadedImageUrl = await uploadProductImage(user.id, imageFile);
       let uploadedBannerUrl = "";
       if (bannerFile) uploadedBannerUrl = await uploadProductImage(user.id, bannerFile);
+      let uploadedBannerVideoUrl = "";
+      if (bannerVideoFile) uploadedBannerVideoUrl = await uploadProductImage(user.id, bannerVideoFile);
       let uploadedBumpImageUrl = "";
       if (bumpImageFile) uploadedBumpImageUrl = await uploadProductImage(user.id, bumpImageFile);
 
@@ -493,7 +572,10 @@ function ProductsPage() {
           thank_you_button_text: thankYouButtonText || "Liberar acesso",
           thank_you_url: thankYouUrl || null,
           image_url: uploadedImageUrl || null,
-          checkout_banner_url: uploadedBannerUrl || null,
+          checkout_banner_url: bannerType === "image" ? (uploadedBannerUrl || null) : null,
+          checkout_banner_type: bannerType,
+          checkout_banner_video_url: bannerType === "video" ? (uploadedBannerVideoUrl || null) : null,
+          timer_enabled: timerEnabled,
           bump_enabled: bumpEnabled,
           bump_title: bumpEnabled ? bumpTitle : null,
           bump_description: bumpEnabled ? bumpDescription : null,
@@ -547,6 +629,10 @@ function ProductsPage() {
     setImageFile(null);
     setBannerUrl(product.checkout_banner_url || "");
     setBannerFile(null);
+    setBannerType(product.checkout_banner_type === "video" ? "video" : "image");
+    setBannerVideoUrl(product.checkout_banner_video_url || "");
+    setBannerVideoFile(null);
+    setTimerEnabled(product.timer_enabled !== false);
     setBumpEnabled(!!product.bump_enabled);
     setBumpTitle(product.bump_title || "");
     setBumpDescription(product.bump_description || "");
@@ -570,6 +656,8 @@ function ProductsPage() {
       if (imageFile) finalImageUrl = await uploadProductImage(editingProduct.user_id, imageFile);
       let finalBannerUrl = bannerUrl;
       if (bannerFile) finalBannerUrl = await uploadProductImage(editingProduct.user_id, bannerFile);
+      let finalBannerVideoUrl = bannerVideoUrl;
+      if (bannerVideoFile) finalBannerVideoUrl = await uploadProductImage(editingProduct.user_id, bannerVideoFile);
       let finalBumpImageUrl = bumpImageUrl;
       if (bumpImageFile) finalBumpImageUrl = await uploadProductImage(editingProduct.user_id, bumpImageFile);
 
@@ -583,7 +671,10 @@ function ProductsPage() {
           thank_you_button_text: thankYouButtonText || "Liberar acesso",
           thank_you_url: thankYouUrl || null,
           image_url: finalImageUrl || null,
-          checkout_banner_url: finalBannerUrl || null,
+          checkout_banner_url: bannerType === "image" ? (finalBannerUrl || null) : null,
+          checkout_banner_type: bannerType,
+          checkout_banner_video_url: bannerType === "video" ? (finalBannerVideoUrl || null) : null,
+          timer_enabled: timerEnabled,
           bump_enabled: bumpEnabled,
           bump_title: bumpEnabled ? bumpTitle : null,
           bump_description: bumpEnabled ? bumpDescription : null,

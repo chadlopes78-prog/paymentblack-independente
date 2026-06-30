@@ -26,6 +26,7 @@ import { Route as DashboardFilesRouteImport } from './routes/_dashboard/files'
 import { Route as DashboardDashboardRouteImport } from './routes/_dashboard/dashboard'
 import { Route as ApiPublicPaymentWebhookRouteImport } from './routes/api/public/payment-webhook'
 import { Route as DashboardReportsTrafficRouteImport } from './routes/_dashboard.reports.traffic'
+import { Route as DashboardCheckoutConfigProductIdRouteImport } from './routes/_dashboard/checkout-config.$productId'
 import { Route as ApiPublicHooksReconcilePendingPaymentsRouteImport } from './routes/api/public/hooks/reconcile-pending-payments'
 import { Route as ApiPublicHooksProcessWebhookQueueRouteImport } from './routes/api/public/hooks/process-webhook-queue'
 import { Route as ApiPublicHooksDailyPaymentSummaryRouteImport } from './routes/api/public/hooks/daily-payment-summary'
@@ -114,6 +115,12 @@ const DashboardReportsTrafficRoute = DashboardReportsTrafficRouteImport.update({
   path: '/reports/traffic',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardCheckoutConfigProductIdRoute =
+  DashboardCheckoutConfigProductIdRouteImport.update({
+    id: '/checkout-config/$productId',
+    path: '/checkout-config/$productId',
+    getParentRoute: () => DashboardRoute,
+  } as any)
 const ApiPublicHooksReconcilePendingPaymentsRoute =
   ApiPublicHooksReconcilePendingPaymentsRouteImport.update({
     id: '/api/public/hooks/reconcile-pending-payments',
@@ -148,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof DashboardSettingsRoute
   '/transactions': typeof DashboardTransactionsRoute
   '/p/$productId': typeof PProductIdRoute
+  '/checkout-config/$productId': typeof DashboardCheckoutConfigProductIdRoute
   '/reports/traffic': typeof DashboardReportsTrafficRoute
   '/api/public/payment-webhook': typeof ApiPublicPaymentWebhookRoute
   '/api/public/hooks/daily-payment-summary': typeof ApiPublicHooksDailyPaymentSummaryRoute
@@ -169,6 +177,7 @@ export interface FileRoutesByTo {
   '/settings': typeof DashboardSettingsRoute
   '/transactions': typeof DashboardTransactionsRoute
   '/p/$productId': typeof PProductIdRoute
+  '/checkout-config/$productId': typeof DashboardCheckoutConfigProductIdRoute
   '/reports/traffic': typeof DashboardReportsTrafficRoute
   '/api/public/payment-webhook': typeof ApiPublicPaymentWebhookRoute
   '/api/public/hooks/daily-payment-summary': typeof ApiPublicHooksDailyPaymentSummaryRoute
@@ -192,6 +201,7 @@ export interface FileRoutesById {
   '/_dashboard/settings': typeof DashboardSettingsRoute
   '/_dashboard/transactions': typeof DashboardTransactionsRoute
   '/p/$productId': typeof PProductIdRoute
+  '/_dashboard/checkout-config/$productId': typeof DashboardCheckoutConfigProductIdRoute
   '/_dashboard/reports/traffic': typeof DashboardReportsTrafficRoute
   '/api/public/payment-webhook': typeof ApiPublicPaymentWebhookRoute
   '/api/public/hooks/daily-payment-summary': typeof ApiPublicHooksDailyPaymentSummaryRoute
@@ -215,6 +225,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/transactions'
     | '/p/$productId'
+    | '/checkout-config/$productId'
     | '/reports/traffic'
     | '/api/public/payment-webhook'
     | '/api/public/hooks/daily-payment-summary'
@@ -236,6 +247,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/transactions'
     | '/p/$productId'
+    | '/checkout-config/$productId'
     | '/reports/traffic'
     | '/api/public/payment-webhook'
     | '/api/public/hooks/daily-payment-summary'
@@ -258,6 +270,7 @@ export interface FileRouteTypes {
     | '/_dashboard/settings'
     | '/_dashboard/transactions'
     | '/p/$productId'
+    | '/_dashboard/checkout-config/$productId'
     | '/_dashboard/reports/traffic'
     | '/api/public/payment-webhook'
     | '/api/public/hooks/daily-payment-summary'
@@ -400,6 +413,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardReportsTrafficRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/_dashboard/checkout-config/$productId': {
+      id: '/_dashboard/checkout-config/$productId'
+      path: '/checkout-config/$productId'
+      fullPath: '/checkout-config/$productId'
+      preLoaderRoute: typeof DashboardCheckoutConfigProductIdRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/api/public/hooks/reconcile-pending-payments': {
       id: '/api/public/hooks/reconcile-pending-payments'
       path: '/api/public/hooks/reconcile-pending-payments'
@@ -433,6 +453,7 @@ interface DashboardRouteChildren {
   DashboardRecoveryRoute: typeof DashboardRecoveryRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardTransactionsRoute: typeof DashboardTransactionsRoute
+  DashboardCheckoutConfigProductIdRoute: typeof DashboardCheckoutConfigProductIdRoute
   DashboardReportsTrafficRoute: typeof DashboardReportsTrafficRoute
 }
 
@@ -445,6 +466,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardRecoveryRoute: DashboardRecoveryRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardTransactionsRoute: DashboardTransactionsRoute,
+  DashboardCheckoutConfigProductIdRoute: DashboardCheckoutConfigProductIdRoute,
   DashboardReportsTrafficRoute: DashboardReportsTrafficRoute,
 }
 

@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import mozFlag from "@/assets/moz-flag.png.asset.json";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const PRODUCT_COLS = "id,user_id,name,description,price,image_url,checkout_banner_url,category,status,custom_url,warranty_days,delivery_type,facebook_pixel_id,bump_enabled,bump_title,bump_description,bump_price,bump_image_url,bump_button_text,bump_highlight_color";
+const PRODUCT_COLS = "id,user_id,name,description,price,image_url,checkout_banner_url,checkout_banner_type,checkout_banner_video_url,timer_enabled,category,status,custom_url,warranty_days,delivery_type,facebook_pixel_id,bump_enabled,bump_title,bump_description,bump_price,bump_image_url,bump_button_text,bump_highlight_color";
 
 // Load product directly from Supabase (anon key + public RLS policy), with Netlify fallback
 async function apiGetProduct(productId: string) {
@@ -483,14 +483,16 @@ function CheckoutPage() {
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100">
       <div className="mx-auto w-full max-w-[460px] px-3 py-4 sm:px-4 sm:py-6">
-        {/* Top countdown banner */}
-        <div className="bg-gradient-to-r from-red-600 to-red-500 text-white rounded-2xl mb-3 px-3.5 py-2.5 flex items-center justify-center gap-2 shadow-[0_4px_14px_-2px_rgba(220,38,38,0.45)]">
-          <Clock className="h-4 w-4 flex-shrink-0" />
-          <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wide truncate">Essa oferta expira em</span>
-          <span className="text-sm font-black tabular-nums bg-white/20 px-2.5 py-1 rounded-md animate-pulse flex-shrink-0">
-            {formatTime(timeLeft)}
-          </span>
-        </div>
+        {/* Top countdown banner — only rendered when the product has the timer enabled */}
+        {product.timer_enabled !== false && (
+          <div className="bg-gradient-to-r from-red-600 to-red-500 text-white rounded-2xl mb-3 px-3.5 py-2.5 flex items-center justify-center gap-2 shadow-[0_4px_14px_-2px_rgba(220,38,38,0.45)]">
+            <Clock className="h-4 w-4 flex-shrink-0" />
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wide truncate">Essa oferta expira em</span>
+            <span className="text-sm font-black tabular-nums bg-white/20 px-2.5 py-1 rounded-md animate-pulse flex-shrink-0">
+              {formatTime(timeLeft)}
+            </span>
+          </div>
+        )}
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.07)] border border-slate-200/60 overflow-hidden">
@@ -516,8 +518,20 @@ function CheckoutPage() {
             </div>
           </div>
 
-          {/* Optional banner */}
-          {product.checkout_banner_url && (
+          {/* Optional banner — image or video, depending on the product's configuration */}
+          {product.checkout_banner_type === "video" && product.checkout_banner_video_url ? (
+            <div className="px-4 sm:px-5 pt-3.5">
+              <video
+                src={product.checkout_banner_video_url}
+                className="w-full h-auto rounded-xl border border-slate-100 bg-black"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+              />
+            </div>
+          ) : product.checkout_banner_url ? (
             <div className="px-4 sm:px-5 pt-3.5">
               <img
                 src={product.checkout_banner_url}
@@ -527,7 +541,7 @@ function CheckoutPage() {
                 decoding="async"
               />
             </div>
-          )}
+          ) : null}
 
           <form onSubmit={handlePayment} className="p-4 sm:p-5 space-y-4">
             {/* Buyer info */}
