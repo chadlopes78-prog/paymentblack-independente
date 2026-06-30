@@ -1,8 +1,6 @@
 import { createFileRoute, useParams } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useState, useEffect } from "react";
-import { processPayment, getPaymentSuccessData, type PaymentResult } from "@/lib/api/payments.functions";
-import { getPublicProduct } from "@/lib/api/product-public.functions";
+import type { PaymentResult } from "@/lib/api/payments.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,18 +27,51 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import mozFlag from "@/assets/moz-flag.png.asset.json";
 
+// API helpers — call Netlify Functions instead of TanStack Start server functions
+async function apiGetProduct(productId: string) {
+  try {
+    const res = await fetch(`/.netlify/functions/api-product?productId=${encodeURIComponent(productId)}`);
+    if (!res.ok) return { product: null, checkout: null, defaultPixel: null };
+    return res.json();
+  } catch {
+    return { product: null, checkout: null, defaultPixel: null };
+  }
+}
+
+async function apiProcessPayment(data: {
+  productId: string;
+  method: string;
+  msisdn: string;
+  customerName: string;
+  contactPhone?: string;
+  trafficPageTrackingId?: string | null;
+  bumpAccepted?: boolean;
+}): Promise<PaymentResult> {
+  const res = await fetch("/.netlify/functions/api-payment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+async function apiGetPaymentStatus(saleId: string) {
+  try {
+    const res = await fetch(`/.netlify/functions/api-payment-status?saleId=${encodeURIComponent(saleId)}`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 export const Route = createFileRoute("/p/$productId")({
   staleTime: 60_000,
   preloadStaleTime: 60_000,
   pendingMs: 0,
   pendingMinMs: 0,
   loader: async ({ params: { productId } }) => {
-    try {
-      return await getPublicProduct({ data: { productId } });
-    } catch (err) {
-      console.error("Loader error:", err);
-      return { product: null, checkout: null, defaultPixel: null };
-    }
+    return apiGetProduct(productId);
   },
   head: ({ loaderData }) => {
     const product = loaderData?.product;
@@ -106,7 +137,6 @@ declare global {
 }
 
 function CheckoutPage() {
-  const payFn = useServerFn(processPayment);
   const { productId } = useParams({ from: "/p/$productId" });
   const { product, defaultPixel } = Route.useLoaderData();
 
@@ -121,7 +151,6 @@ function CheckoutPage() {
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [failureModalOpen, setFailureModalOpen] = useState(false);
-  const pollFn = useServerFn(getPaymentSuccessData);
 
 
   const [name, setName] = useState("");
@@ -151,7 +180,7 @@ function CheckoutPage() {
       while (!cancelled && attempts < MAX) {
         attempts++;
         try {
-          const r = (await pollFn({ data: { saleId: pendingSaleId } })) as
+          const r = (await apiGetPaymentStatus(pendingSaleId)) as
             | {
                 sale?: { status?: string | null; status_reason?: string | null } | null;
                 product?: {
@@ -233,7 +262,7 @@ function CheckoutPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [pendingSaleId, pollFn]);
+  }, [pendingSaleId]);
 
 
   const formatTime = (seconds: number) => {
@@ -345,17 +374,15 @@ function CheckoutPage() {
     trackEvent("InitiateCheckout");
 
     try {
-      const result = (await payFn({
-        data: {
-          productId,
-          method: paymentMethod,
-          msisdn: sanitizePhone(phone),
-          customerName: name,
-          contactPhone: contactPhone ? sanitizePhone(contactPhone) : undefined,
-          trafficPageTrackingId: trafficPageId,
-          bumpAccepted: bumpAccepted && !!product?.bump_enabled,
-        },
-      })) as PaymentResult;
+      const result = await apiProcessPayment({
+        productId,
+        method: paymentMethod,
+        msisdn: sanitizePhone(phone),
+        customerName: name,
+        contactPhone: contactPhone ? sanitizePhone(contactPhone) : undefined,
+        trafficPageTrackingId: trafficPageId,
+        bumpAccepted: bumpAccepted && !!product?.bump_enabled,
+      }) as PaymentResult;
 
       if (!result.success) {
         setPaymentErrorMessage(result.error || "Pagamento recusado.");

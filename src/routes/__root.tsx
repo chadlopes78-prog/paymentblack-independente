@@ -93,7 +93,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:site", content: "@PaymentBlackMZ" },
       { name: "twitter:title", content: "Paymentblack Mozambique | Plataforma de Pagamentos" },
       { name: "twitter:description", content: "A plataforma de pagamentos e checkout mais completa para Moçambique. Aceite M-Pesa e e-Mola." },
 
@@ -101,7 +101,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/4f30b18f-4006-44c5-aa69-aa14f7bc9f00/id-preview-0f09bcce--4fb7a44a-76ae-40f5-b7af-384c8a31cb3b.lovable.app-1780562490496.png" },
     ],
     links: [
-      { rel: "preconnect", href: "https://thgruqixqfrxfckjlphb.supabase.co" },
+      { rel: "preconnect", href: "https://wdhiralaekjeucbxudyf.supabase.co" },
       { rel: "preconnect", href: "https://connect.facebook.net" },
 
 
