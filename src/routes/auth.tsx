@@ -35,7 +35,6 @@ function AuthPage() {
         if (isAdminEmail(session.user.email)) {
           navigate({ to: "/admin" });
         } else {
-          // Check profile status
           const { data: profile } = await supabase
             .from("profiles")
             .select("status")
@@ -45,12 +44,9 @@ function AuthPage() {
           if (profile?.status === "banned" || profile?.status === "rejected") {
             await supabase.auth.signOut();
             navigate({ to: "/blocked" });
-          } else if (profile?.status === "pending" || !profile?.status) {
-            navigate({ to: "/waiting-approval" });
           } else {
             navigate({ to: "/dashboard" });
           }
-
         }
       }
     });
@@ -125,11 +121,6 @@ function AuthPage() {
       if (profile?.status === "banned" || profile?.status === "rejected") {
         await supabase.auth.signOut();
         navigate({ to: "/blocked" });
-        return;
-      }
-
-      if (profile?.status === "pending" || !profile?.status) {
-        navigate({ to: "/waiting-approval" });
         return;
       }
 

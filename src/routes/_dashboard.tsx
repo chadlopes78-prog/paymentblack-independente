@@ -86,12 +86,8 @@ function DashboardLayout() {
 
   useEffect(() => {
     const checkStatus = (p: any) => {
-      if (p?.status === "banned") {
+      if (p?.status === "banned" || p?.status === "rejected") {
         navigate({ to: "/blocked" });
-      } else if (p?.status === "rejected") {
-        navigate({ to: "/blocked" });
-      } else if (p?.status === "pending") {
-        navigate({ to: "/waiting-approval" });
       }
     };
 
@@ -124,13 +120,12 @@ function DashboardLayout() {
         if (error) throw error;
 
         if (!userProfile) {
-          // If profile doesn't exist, create it as pending (requires admin approval)
           const { data: newProfile, error: upsertError } = await supabase
             .from("profiles")
-            .upsert({ 
+            .upsert({
               id: session.user.id,
               full_name: session.user.user_metadata?.full_name || '',
-              status: 'pending',
+              status: 'approved',
               role: 'user'
             })
             .select()

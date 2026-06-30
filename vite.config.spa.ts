@@ -30,6 +30,31 @@ export default defineConfig({
   plugins: [stubTanstackStartPlugin(), react(), tailwindcss(), tsconfigPaths()],
   build: {
     outDir: "dist-spa",
+    target: "es2020",
+    minify: "esbuild",
+    cssMinify: true,
+    rollupOptions: {
+      output: {
+        // Separar vendor pesado do código da app para melhor cache
+        manualChunks(id) {
+          if (id.includes("node_modules/recharts") || id.includes("node_modules/d3-")) {
+            return "charts";
+          }
+          if (id.includes("node_modules/@radix-ui")) {
+            return "radix";
+          }
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+            return "react";
+          }
+          if (id.includes("node_modules/@supabase")) {
+            return "supabase";
+          }
+          if (id.includes("node_modules/@tanstack")) {
+            return "tanstack";
+          }
+        },
+      },
+    },
   },
   resolve: {
     alias: [

@@ -27,15 +27,45 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import mozFlag from "@/assets/moz-flag.png.asset.json";
 
-// API helpers — call Netlify Functions instead of TanStack Start server functions
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const PRODUCT_COLS = "id,user_id,name,description,price,image_url,checkout_banner_url,category,status,custom_url,warranty_days,delivery_type,facebook_pixel_id,bump_enabled,bump_title,bump_description,bump_price,bump_image_url,bump_button_text,bump_highlight_color";
+
+// Load product directly from Supabase (anon key + public RLS policy), with Netlify fallback
 async function apiGetProduct(productId: string) {
   try {
-    const res = await fetch(`/.netlify/functions/api-product?productId=${encodeURIComponent(productId)}`);
-    if (!res.ok) return { product: null, checkout: null, defaultPixel: null };
-    return res.json();
+    const isUuid = UUID_RE.test(productId);
+    const col = isUuid ? "id" : "custom_url";
+
+    const { data: product, error } = await supabase
+      .from("products")
+      .select(PRODUCT_COLS)
+      .eq(col, productId)
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (!error && product) {
+      const pixelRes = product.facebook_pixel_id
+        ? null
+        : await supabase
+            .from("pixel_configs")
+            .select("fb_pixel_id")
+            .eq("user_id", product.user_id)
+            .maybeSingle();
+      return { product, checkout: null, defaultPixel: pixelRes?.data ?? null };
+    }
   } catch {
-    return { product: null, checkout: null, defaultPixel: null };
+    // fall through to Netlify function
   }
+
+  // Fallback: Netlify Function (requires SUPABASE_SERVICE_ROLE_KEY on Netlify)
+  try {
+    const res = await fetch(`/.netlify/functions/api-product?productId=${encodeURIComponent(productId)}`);
+    if (res.ok) return res.json();
+  } catch {
+    // ignore
+  }
+
+  return { product: null, checkout: null, defaultPixel: null };
 }
 
 async function apiProcessPayment(data: {
