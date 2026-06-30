@@ -37,7 +37,12 @@
   [headers.values]
     Cache-Control = "public, max-age=86400"
 
-# HTML sem cache (SPA deve sempre buscar a versão mais recente)
+# Todas as rotas HTML sem cache (SPA deve sempre buscar a versão mais recente)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
 [[headers]]
   for = "/index.html"
   [headers.values]
