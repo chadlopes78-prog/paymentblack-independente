@@ -6,12 +6,12 @@ function createSupabaseClient() {
   const SUPABASE_URL =
     import.meta.env.VITE_SUPABASE_URL ||
     (typeof process !== 'undefined' ? process.env?.SUPABASE_URL : undefined) ||
-    "https://wdhiralaekjeucbxudyf.supabase.co";
+    "https://xmqrjgqufcrvtpmccheh.supabase.co";
 
   const SUPABASE_PUBLISHABLE_KEY =
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     (typeof process !== 'undefined' ? process.env?.SUPABASE_PUBLISHABLE_KEY : undefined) ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndkaGlyYWxhZWtqZXVjYnh1ZHlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwNjI2MjIsImV4cCI6MjA5NzYzODYyMn0.iZ2386mUJ2-SZFd49zMKiMkcX1pzkqE349KpI1L25V4";
+    "sb_publishable_KITACKwp1yib0ey6rts1Lw_aIPdbiA-";
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     throw new Error("Supabase não configurado.");
