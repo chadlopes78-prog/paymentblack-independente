@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MessageSquare, MessageCircle, CheckCircle2, Clock, TrendingUp, Search, Trash2, Send, Pencil, RotateCcw } from "lucide-react";
+import { MessageSquare, MessageCircle, CheckCircle2, Clock, TrendingUp, Search, Trash2, Send, Pencil, RotateCcw, CheckSquare } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -131,6 +132,7 @@ function RecoveryPage() {
   const [resetAt, setResetAt] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [sendingBulk, setSendingBulk] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [messageTemplate, setMessageTemplate] = useState<string>(DEFAULT_TEMPLATE);
   const [templateDraft, setTemplateDraft] = useState<string>(DEFAULT_TEMPLATE);
   const [templateOpen, setTemplateOpen] = useState(false);
@@ -368,6 +370,65 @@ function RecoveryPage() {
     [periodItems],
   );
 
+  const selectableKeys = useMemo(() => filtered.filter(i => i.status !== "recovered").map(i => i.key), [filtered]);
+  const allSelected = selectableKeys.length > 0 && selectableKeys.every(k => selected.has(k));
+  const someSelected = selectableKeys.some(k => selected.has(k));
+
+  const toggleSelect = useCallback((key: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelected(prev => {
+        const next = new Set(prev);
+        selectableKeys.forEach(k => next.delete(k));
+        return next;
+      });
+    } else {
+      setSelected(prev => new Set([...prev, ...selectableKeys]));
+    }
+  }, [allSelected, selectableKeys]);
+
+  const handleSendSelected = async () => {
+    if (sendingBulk) return;
+    const targets = filtered.filter(i => selected.has(i.key) && i.status !== "recovered");
+    if (targets.length === 0) { toast.info("Nenhum contato selecionado."); return; }
+    setSendingBulk(true);
+    let sent = 0; let failed = 0; let ignored = 0; let popupBlocked = false;
+    toast.info(`Enviando ${targets.length} mensagem(ns)...`);
+    for (const item of targets) {
+      if (!item.customerPhone?.trim() || !isValidMozPhone(item.customerPhone)) {
+        ignored++;
+        continue;
+      }
+      try {
+        const url = buildWhatsAppLink(item);
+        let opened: Window | null = null;
+        try { opened = window.open(url, "_blank", "noopener,noreferrer"); } catch { opened = null; }
+        if (!opened) { popupBlocked = true; failed++; continue; }
+        try { await logAttempt({ data: { productId: item.productId, customerPhone: item.customerPhone } }); } catch { /* noop */ }
+        sent++;
+      } catch { failed++; }
+      try { await new Promise(r => setTimeout(r, 600)); } catch { /* noop */ }
+    }
+    await refetchAttempts().catch(() => {});
+    setSelected(new Set());
+    setSendingBulk(false);
+    const parts = [];
+    if (sent > 0) parts.push(`${sent} enviada(s)`);
+    if (failed > 0) parts.push(`${failed} falhou(aram)`);
+    if (ignored > 0) parts.push(`${ignored} ignorada(s)`);
+    const summary = parts.join(" · ") || "Nenhum envio processado.";
+    if (sent > 0) toast.success(`Concluído: ${summary}`);
+    else toast.error(`Concluído: ${summary}`);
+    if (popupBlocked) toast.error("Pop-ups bloqueados. Permita pop-ups e tente novamente.");
+  };
+
   const isValidMozPhone = (raw: string) => {
     const digits = (raw ?? "").replace(/\D/g, "");
     const local = digits.startsWith("258") ? digits.slice(3) : digits;
@@ -507,14 +568,26 @@ function RecoveryPage() {
               <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="w-[150px]" />
             </>
           )}
+          {someSelected && (
+            <Button
+              size="sm"
+              onClick={handleSendSelected}
+              disabled={sendingBulk}
+              className="bg-[#25D366] hover:bg-[#1DAE54] text-white"
+            >
+              <CheckSquare className="h-4 w-4 mr-1.5" />
+              {sendingBulk ? "Enviando..." : `Enviar Selecionados (${[...selected].filter(k => filtered.find(i => i.key === k && i.status !== "recovered")).length})`}
+            </Button>
+          )}
           <Button
             size="sm"
             onClick={handleSendAll}
             disabled={sendingBulk || pendingToSend.length === 0}
             className="bg-[#25D366] hover:bg-[#1DAE54] text-white"
+            variant={someSelected ? "outline" : "default"}
           >
             <Send className="h-4 w-4 mr-1.5" />
-            {sendingBulk ? "Enviando..." : `Enviar para Todos os Pendentes${pendingToSend.length ? ` (${pendingToSend.length})` : ""}`}
+            {sendingBulk ? "Enviando..." : `Enviar Todos Pendentes${pendingToSend.length ? ` (${pendingToSend.length})` : ""}`}
           </Button>
           <Dialog
             open={templateOpen}
@@ -639,6 +712,9 @@ function RecoveryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} aria-label="Selecionar todos" />
+                    </TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>WhatsApp</TableHead>
                     <TableHead>Produto</TableHead>
@@ -651,7 +727,16 @@ function RecoveryPage() {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((item) => (
-                    <TableRow key={item.key}>
+                    <TableRow key={item.key} className={selected.has(item.key) ? "bg-muted/40" : ""}>
+                      <TableCell>
+                        {item.status !== "recovered" && (
+                          <Checkbox
+                            checked={selected.has(item.key)}
+                            onCheckedChange={() => toggleSelect(item.key)}
+                            aria-label={`Selecionar ${item.customerName}`}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">{item.customerName}</TableCell>
                       <TableCell className="whitespace-nowrap">{formatPhoneDisplay(item.customerPhone)}</TableCell>
                       <TableCell>{item.productName}</TableCell>
