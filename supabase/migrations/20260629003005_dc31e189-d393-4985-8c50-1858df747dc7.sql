@@ -1,0 +1,1 @@
+REVOKE SELECT (delivery_link, delivery_file_url, access_link, facebook_access_token, support_phone, support_number) ON public.products FROM anon;

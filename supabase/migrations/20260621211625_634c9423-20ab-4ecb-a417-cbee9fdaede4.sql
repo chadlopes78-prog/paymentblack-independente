@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS payout_mpesa text; ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS payout_emola text;

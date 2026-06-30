@@ -1,0 +1,1 @@
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS thank_you_button_text TEXT DEFAULT 'Liberar acesso';

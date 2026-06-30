@@ -1,0 +1,1 @@
+GRANT SELECT (checkout_banner_url) ON public.products TO anon;
