@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, Link, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect, useState, lazy, Suspense } from "react";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard,
@@ -76,6 +77,7 @@ function DashboardLayoutWrapper() {
 }
 
 function DashboardLayout() {
+  useVersionCheck();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(["Relatórios"]);
