@@ -1,6 +1,10 @@
 [build]
-  command = "npm install && npm run build:netlify"
+  command = "npm install --legacy-peer-deps && npm run build:netlify"
   publish = "dist-spa"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
 
 [[redirects]]
   from = "/*"
