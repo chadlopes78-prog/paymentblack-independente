@@ -483,23 +483,13 @@ function CheckoutPage() {
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100">
       <div className="mx-auto w-full max-w-[460px] px-3 py-4 sm:px-4 sm:py-6">
-        {/* Top countdown banner — Kiwify-style horizontal timer */}
-        <div className="bg-slate-900 text-white rounded-xl mb-3 px-3.5 py-2.5 sm:px-4 flex items-center justify-between gap-3 shadow-[0_4px_16px_-4px_rgba(15,23,42,0.5)] border border-slate-800">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <Clock className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-300 truncate">
-              Oferta expira em
-            </span>
-          </div>
-          <div className="flex items-center gap-[2px] flex-shrink-0">
-            <span className="bg-red-600 text-white text-sm sm:text-base font-black tabular-nums rounded-md px-2 py-0.5 leading-tight">
-              {Math.floor(timeLeft / 60).toString().padStart(2, "0")}
-            </span>
-            <span className="text-red-500 font-black text-sm">:</span>
-            <span className="bg-red-600 text-white text-sm sm:text-base font-black tabular-nums rounded-md px-2 py-0.5 leading-tight">
-              {(timeLeft % 60).toString().padStart(2, "0")}
-            </span>
-          </div>
+        {/* Top countdown banner */}
+        <div className="bg-gradient-to-r from-red-600 to-red-500 text-white rounded-2xl mb-3 px-3.5 py-2.5 flex items-center justify-center gap-2 shadow-[0_4px_14px_-2px_rgba(220,38,38,0.45)]">
+          <Clock className="h-4 w-4 flex-shrink-0" />
+          <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wide truncate">Essa oferta expira em</span>
+          <span className="text-sm font-black tabular-nums bg-white/20 px-2.5 py-1 rounded-md animate-pulse flex-shrink-0">
+            {formatTime(timeLeft)}
+          </span>
         </div>
 
         {/* Card */}
@@ -567,24 +557,19 @@ function CheckoutPage() {
               </div>
             </div>
 
-            {/* Method selector — most prominent section of the checkout */}
-            <div className="rounded-2xl border-2 border-slate-900 bg-slate-50/60 p-3 sm:p-4 space-y-2.5 shadow-[0_4px_18px_-6px_rgba(15,23,42,0.18)]">
-              <div className="flex items-center gap-1.5">
-                <div className="h-5 w-5 rounded-md bg-slate-900 flex items-center justify-center flex-shrink-0">
-                  <Lock className="h-3 w-3 text-white" />
-                </div>
-                <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900">
-                  Método de Pagamento
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2.5">
+            {/* Method selector */}
+            <div className="space-y-2 pt-1">
+              <span className="text-sm font-extrabold uppercase tracking-wider text-slate-900">
+                Método de Pagamento
+              </span>
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => { setPaymentMethod("mpesa"); setPhone(""); }}
                   className={cn(
-                    "relative flex items-center gap-2 p-3 rounded-xl border-2 transition-all bg-white",
+                    "relative flex items-center gap-2 p-2.5 sm:p-3 rounded-xl border-2 transition-all bg-white",
                     paymentMethod === "mpesa"
-                      ? "border-[#E30613] shadow-[0_0_0_3px_rgba(227,6,19,0.1)] scale-[1.02]"
+                      ? "border-[#E30613] shadow-[0_0_0_3px_rgba(227,6,19,0.08)]"
                       : "border-slate-200 hover:border-slate-300",
                   )}
                 >
@@ -600,9 +585,9 @@ function CheckoutPage() {
                   type="button"
                   onClick={() => { setPaymentMethod("emola"); setPhone(""); }}
                   className={cn(
-                    "relative flex items-center gap-2 p-3 rounded-xl border-2 transition-all bg-white",
+                    "relative flex items-center gap-2 p-2.5 sm:p-3 rounded-xl border-2 transition-all bg-white",
                     paymentMethod === "emola"
-                      ? "border-orange-500 shadow-[0_0_0_3px_rgba(249,115,22,0.12)] scale-[1.02]"
+                      ? "border-orange-500 shadow-[0_0_0_3px_rgba(249,115,22,0.1)]"
                       : "border-slate-200 hover:border-slate-300",
                   )}
                 >
@@ -615,24 +600,25 @@ function CheckoutPage() {
                   )}
                 </button>
               </div>
+            </div>
 
-              {/* Payment number — flag + country code react to the selected method */}
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
-                  <img src={mozFlag.url} alt="Moçambique" className="h-4 w-6 object-cover rounded-sm shadow-sm ring-1 ring-black/5" />
-                  <span className="text-xs font-bold text-slate-600">+258</span>
-                </div>
-                <Input
-                  placeholder={paymentMethod === "mpesa" ? "Número M-Pesa (84/85)" : "Número e-Mola (86/87)"}
-                  required
-                  inputMode="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(sanitizePhone(e.target.value))}
-                  maxLength={9}
-                  className="h-12 pl-[78px] border-slate-200 rounded-xl bg-white text-sm font-medium placeholder:text-slate-400 focus-visible:ring-2 focus-visible:bg-white"
-                  style={{ ['--tw-ring-color' as any]: accent }}
-                />
+            {/* Payment number */}
+            <div className="relative">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+                <img src={mozFlag.url} alt="MZ" className="h-3.5 w-5 object-cover rounded-sm" />
+                <span className="text-xs font-semibold text-slate-500">+258</span>
               </div>
+              <Input
+                placeholder={paymentMethod === "mpesa" ? "Número M-Pesa (84/85)" : "Número e-Mola (86/87)"}
+                required
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(sanitizePhone(e.target.value))}
+                maxLength={9}
+
+                className="h-12 pl-[72px] border-slate-200 rounded-xl bg-slate-50/50 text-sm font-medium placeholder:text-slate-400 focus-visible:ring-2 focus-visible:bg-white"
+                style={{ ['--tw-ring-color' as any]: accent }}
+              />
             </div>
 
             {/* Status / error */}
