@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "build:netlify": "vite build --config vite.config.spa.ts",
-    "postinstall": "node scripts/patch-tanstack.js"
+    "postinstall": "node scripts/patch-tanstack.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
