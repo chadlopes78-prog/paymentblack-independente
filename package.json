@@ -9,7 +9,9 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "build:netlify": "vite build --config vite.config.spa.ts",
+    "postinstall": "node scripts/patch-tanstack.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
