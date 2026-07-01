@@ -208,13 +208,18 @@ export const handler = async (event: any) => {
     };
   }
 
-  // Parallel: owner payout config + dedup check
+  // Parallel: owner payout config + per-user gateway config + dedup check
   const dedupCutoff = new Date(Date.now() - 3_000).toISOString();
-  const [ownerRes, dupRes, trafficRes] = await Promise.all([
+  const [ownerRes, userCfgRes, dupRes, trafficRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("payout_number, payout_method, payout_mpesa, payout_emola")
       .eq("id", p.user_id)
+      .maybeSingle(),
+    supabase
+      .from("user_payment_configs")
+      .select("doc_enabled, doc_credentials, e2p_enabled, e2p_mpesa_client_id, e2p_mpesa_client_secret, e2p_mpesa_wallet, e2p_emola_client_id, e2p_emola_client_secret, e2p_emola_wallet")
+      .eq("user_id", p.user_id)
       .maybeSingle(),
     supabase
       .from("sales")
@@ -258,6 +263,30 @@ export const handler = async (event: any) => {
       headers: CORS,
       body: JSON.stringify({ success: false, error: "Número de payout inválido." }),
     };
+  }
+
+  // Resolve per-user gateway override (doc-based or E2Payments)
+  const uc = (userCfgRes as any).data as any;
+  if (uc?.doc_enabled && uc?.doc_credentials?.api_key) {
+    // User has a document-based config active: override API key / base URL
+    const creds = uc.doc_credentials as Record<string, string>;
+    if (creds.api_key) apiKey = creds.api_key;
+    if (creds.base_url) baseUrl = creds.base_url.trim().replace(/\/+$/, "").replace(/\/api\/pay$/i, "");
+  } else if (uc?.e2p_enabled) {
+    // E2Payments override: swap out the wallet payout number for the user-configured one
+    const e2pWallet = method === "mpesa" ? uc.e2p_mpesa_wallet : uc.e2p_emola_wallet;
+    if (e2pWallet) {
+      // The E2Payments gateway uses the same PayFlax-compatible endpoint format;
+      // credentials and wallet override come from the user's stored config.
+      const e2pClientId     = method === "mpesa" ? uc.e2p_mpesa_client_id     : uc.e2p_emola_client_id;
+      const e2pClientSecret = method === "mpesa" ? uc.e2p_mpesa_client_secret : uc.e2p_emola_client_secret;
+      if (e2pClientId) apiKey = e2pClientId;
+      if (e2pClientSecret) {
+        // Combine client_id:client_secret as Bearer token for E2Payments auth
+        apiKey = `${e2pClientId}:${e2pClientSecret}`;
+      }
+      baseUrl = "https://api.e2payments.explicatis.com/v1";
+    }
   }
 
   const finalTrafficPageId = (trafficRes as any).data?.id ?? null;

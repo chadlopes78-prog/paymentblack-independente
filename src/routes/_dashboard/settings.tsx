@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings, Shield, Globe, Bell, User, History, MessageSquare, PieChart, Smartphone, Lock, Trash2, AlertTriangle } from "lucide-react";
+import { PaymentConfigSection } from "@/components/dashboard/PaymentConfigSection";
 import { Switch } from "@/components/ui/switch";
 import { PushNotificationManager } from "@/components/dashboard/PushNotificationManager";
 import { WebhooksSection } from "@/components/dashboard/WebhooksSection";
@@ -428,6 +429,22 @@ function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* ── Advanced processing options ── */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <PieChart className="h-5 w-5 text-primary" />
+              <CardTitle>Processamento Avançado</CardTitle>
+            </div>
+            <CardDescription>
+              Configure formas alternativas de processamento de pagamentos para a sua conta.
+              Quando ativo, substitui o processamento padrão da plataforma.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PaymentConfigSection />
+          </CardContent>
+        </Card>
 
         <WebhooksSection />
 
