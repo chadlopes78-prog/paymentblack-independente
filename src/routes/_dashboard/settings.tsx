@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Settings, Shield, Globe, Bell, User, History, MessageSquare, PieChart, Smartphone, Lock, Trash2, AlertTriangle } from "lucide-react";
-import { PaymentConfigSection } from "@/components/dashboard/PaymentConfigSection";
+import { Settings, Shield, Globe, Bell, User, History, MessageSquare, PieChart, Smartphone, Lock, Trash2, AlertTriangle, Wifi } from "lucide-react";
+import { DocPaymentSection, E2pPaymentSection } from "@/components/dashboard/PaymentConfigSection";
 import { Switch } from "@/components/ui/switch";
 import { PushNotificationManager } from "@/components/dashboard/PushNotificationManager";
 import { WebhooksSection } from "@/components/dashboard/WebhooksSection";
@@ -426,23 +426,29 @@ function SettingsPage() {
                 </div>
               )}
             </div>
+
+            {/* Separator */}
+            <div className="h-px bg-slate-100" />
+
+            {/* Document-based advanced processing */}
+            <DocPaymentSection />
           </CardContent>
         </Card>
 
-        {/* ── Advanced processing options ── */}
+        {/* ── E2Payments wallet integration ── */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <PieChart className="h-5 w-5 text-primary" />
-              <CardTitle>Processamento Avançado</CardTitle>
+              <Wifi className="h-5 w-5 text-primary" />
+              <CardTitle>Integração com Carteira (E2Payments)</CardTitle>
             </div>
             <CardDescription>
-              Configure formas alternativas de processamento de pagamentos para a sua conta.
-              Quando ativo, substitui o processamento padrão da plataforma.
+              Configure manualmente as credenciais da sua carteira E2Payments para M-Pesa e e-Mola.
+              Quando ativada, substitui o processamento padrão da plataforma para os pagamentos desta conta.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <PaymentConfigSection />
+            <E2pPaymentSection />
           </CardContent>
         </Card>
 
