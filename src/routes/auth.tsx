@@ -44,6 +44,8 @@ function AuthPage() {
           if (profile?.status === "banned" || profile?.status === "rejected") {
             await supabase.auth.signOut();
             navigate({ to: "/blocked" });
+          } else if (profile?.status === "pending" || !profile) {
+            navigate({ to: "/waiting-approval" });
           } else {
             navigate({ to: "/dashboard" });
           }

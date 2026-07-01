@@ -90,6 +90,8 @@ function DashboardLayout() {
     const checkStatus = (p: any) => {
       if (p?.status === "banned" || p?.status === "rejected") {
         navigate({ to: "/blocked" });
+      } else if (p?.status === "pending") {
+        navigate({ to: "/waiting-approval" });
       }
     };
 
@@ -242,7 +244,7 @@ function DashboardLayout() {
     
     { name: "Recuperação de Vendas", icon: MessageCircle, path: "/recovery" },
     { name: "Pixel Facebook", icon: Target, path: "/pixel" },
-    ...(profile?.role === 'admin' || isAdminEmail(user?.email) ? [{ name: "Painel Operacional", icon: ShieldCheck, path: "/admin" }] : []),
+    ...(profile?.role === 'admin' || isAdminEmail(user?.email) ? [{ name: "Controle do Sistema", icon: ShieldCheck, path: "/admin" }] : []),
     { name: "Configurações", icon: Settings, path: "/settings" },
   ];
 

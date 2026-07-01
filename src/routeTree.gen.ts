@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WaitingApprovalRouteImport } from './routes/waiting-approval'
 import { Route as BlockedRouteImport } from './routes/blocked'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as DashboardRouteImport } from './routes/_dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PProductIdRouteImport } from './routes/p.$productId'
@@ -24,6 +23,7 @@ import { Route as DashboardPixelRouteImport } from './routes/_dashboard/pixel'
 import { Route as DashboardPaymentSummaryRouteImport } from './routes/_dashboard/payment-summary'
 import { Route as DashboardFilesRouteImport } from './routes/_dashboard/files'
 import { Route as DashboardDashboardRouteImport } from './routes/_dashboard/dashboard'
+import { Route as DashboardAdminRouteImport } from './routes/_dashboard/admin'
 import { Route as ApiPublicPaymentWebhookRouteImport } from './routes/api/public/payment-webhook'
 import { Route as DashboardReportsTrafficRouteImport } from './routes/_dashboard.reports.traffic'
 import { Route as DashboardCheckoutConfigProductIdRouteImport } from './routes/_dashboard/checkout-config.$productId'
@@ -44,11 +44,6 @@ const BlockedRoute = BlockedRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -105,6 +100,11 @@ const DashboardDashboardRoute = DashboardDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardAdminRoute = DashboardAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const ApiPublicPaymentWebhookRoute = ApiPublicPaymentWebhookRouteImport.update({
   id: '/api/public/payment-webhook',
   path: '/api/public/payment-webhook',
@@ -142,10 +142,10 @@ const ApiPublicHooksDailyPaymentSummaryRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/blocked': typeof BlockedRoute
   '/waiting-approval': typeof WaitingApprovalRoute
+  '/admin': typeof DashboardAdminRoute
   '/dashboard': typeof DashboardDashboardRoute
   '/files': typeof DashboardFilesRoute
   '/payment-summary': typeof DashboardPaymentSummaryRoute
@@ -164,10 +164,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/blocked': typeof BlockedRoute
   '/waiting-approval': typeof WaitingApprovalRoute
+  '/admin': typeof DashboardAdminRoute
   '/dashboard': typeof DashboardDashboardRoute
   '/files': typeof DashboardFilesRoute
   '/payment-summary': typeof DashboardPaymentSummaryRoute
@@ -188,10 +188,10 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_dashboard': typeof DashboardRouteWithChildren
-  '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/blocked': typeof BlockedRoute
   '/waiting-approval': typeof WaitingApprovalRoute
+  '/_dashboard/admin': typeof DashboardAdminRoute
   '/_dashboard/dashboard': typeof DashboardDashboardRoute
   '/_dashboard/files': typeof DashboardFilesRoute
   '/_dashboard/payment-summary': typeof DashboardPaymentSummaryRoute
@@ -212,10 +212,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/admin'
     | '/auth'
     | '/blocked'
     | '/waiting-approval'
+    | '/admin'
     | '/dashboard'
     | '/files'
     | '/payment-summary'
@@ -234,10 +234,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/auth'
     | '/blocked'
     | '/waiting-approval'
+    | '/admin'
     | '/dashboard'
     | '/files'
     | '/payment-summary'
@@ -257,10 +257,10 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_dashboard'
-    | '/admin'
     | '/auth'
     | '/blocked'
     | '/waiting-approval'
+    | '/_dashboard/admin'
     | '/_dashboard/dashboard'
     | '/_dashboard/files'
     | '/_dashboard/payment-summary'
@@ -281,7 +281,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRouteWithChildren
-  AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
   BlockedRoute: typeof BlockedRoute
   WaitingApprovalRoute: typeof WaitingApprovalRoute
@@ -313,13 +312,6 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_dashboard': {
@@ -399,6 +391,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardDashboardRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/_dashboard/admin': {
+      id: '/_dashboard/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof DashboardAdminRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/api/public/payment-webhook': {
       id: '/api/public/payment-webhook'
       path: '/api/public/payment-webhook'
@@ -445,6 +444,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface DashboardRouteChildren {
+  DashboardAdminRoute: typeof DashboardAdminRoute
   DashboardDashboardRoute: typeof DashboardDashboardRoute
   DashboardFilesRoute: typeof DashboardFilesRoute
   DashboardPaymentSummaryRoute: typeof DashboardPaymentSummaryRoute
@@ -458,6 +458,7 @@ interface DashboardRouteChildren {
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardAdminRoute: DashboardAdminRoute,
   DashboardDashboardRoute: DashboardDashboardRoute,
   DashboardFilesRoute: DashboardFilesRoute,
   DashboardPaymentSummaryRoute: DashboardPaymentSummaryRoute,
@@ -477,7 +478,6 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRouteWithChildren,
-  AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
   BlockedRoute: BlockedRoute,
   WaitingApprovalRoute: WaitingApprovalRoute,
