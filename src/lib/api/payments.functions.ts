@@ -33,7 +33,20 @@ export type PaymentErrorCode =
   | "internal";
 
 export type PaymentResult =
-  | { success: true; saleId: string; transactionId: string | null }
+  | {
+      success: true;
+      saleId: string;
+      transactionId: string | null;
+      // Present when the gateway confirmed payment synchronously (E2Payments,
+      // or PayFlax answering within the client wait budget) — lets the
+      // checkout redirect immediately instead of opening the poll loop.
+      status?: "paid";
+      product?: {
+        thank_you_url?: string | null;
+        access_link?: string | null;
+        delivery_link?: string | null;
+      } | null;
+    }
   | { success: false; error: string; code?: PaymentErrorCode; retryable?: boolean; saleId?: string };
 
 function classifyError(msg: string): { code: PaymentErrorCode; retryable: boolean } {

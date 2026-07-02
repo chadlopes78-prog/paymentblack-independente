@@ -23,7 +23,17 @@ const EXPIRED_STATUSES = new Set(["expired", "timeout", "timed_out"]);
 
 const E2P_BASE_URL = "https://e2payments.explicador.co.mz";
 
+// Reused across invocations on a warm Lambda container — saves a full
+// OAuth round-trip (typically 150-400ms) on every payment after the first.
+// Keyed by clientId since different sellers have different credentials.
+const e2pTokenCache = new Map<string, { value: string; expiresAt: number }>();
+
 async function getE2pAccessToken(clientId: string, clientSecret: string): Promise<string> {
+  const cached = e2pTokenCache.get(clientId);
+  if (cached && cached.expiresAt > Date.now() + 30_000) {
+    return cached.value;
+  }
+
   const res = await fetch(`${E2P_BASE_URL}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -35,7 +45,11 @@ async function getE2pAccessToken(clientId: string, clientSecret: string): Promis
   if (!res.ok || !json?.access_token) {
     throw new Error(`Falha ao autenticar com E2Payments (HTTP ${res.status}).`);
   }
-  return String(json.access_token);
+
+  const expiresInMs = (Number(json.expires_in) || 3600) * 1000;
+  const token = String(json.access_token);
+  e2pTokenCache.set(clientId, { value: token, expiresAt: Date.now() + expiresInMs });
+  return token;
 }
 
 async function callE2pGateway(params: {
@@ -75,6 +89,23 @@ async function callE2pGateway(params: {
   let json: any = null;
   try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
   return { ok: res.ok, json, status: res.status };
+}
+
+/**
+ * Builds the same product-access shape the frontend expects from
+ * api-payment-status, so a synchronously-confirmed payment (E2Payments,
+ * or PayFlax responding within the client wait budget) can redirect the
+ * customer immediately instead of waiting for the poll loop to catch up.
+ */
+function buildProductAccessPayload(p: any) {
+  return {
+    access_link: p.access_link ?? null,
+    delivery_link: p.delivery_link ?? null,
+    support_phone: p.support_phone ?? null,
+    support_number: p.support_number ?? null,
+    thank_you_button_text: p.thank_you_button_text ?? null,
+    thank_you_url: p.thank_you_url ?? null,
+  };
 }
 
 function normalizeMozambicanPhone(raw: string): string {
@@ -239,7 +270,9 @@ async function handleRequest(event: any) {
   const isUuid = UUID_RE.test(productId);
   const { data: product, error: productError } = await supabase
     .from("products")
-    .select("id, price, status, user_id, bump_enabled, bump_price")
+    .select(
+      "id, price, status, user_id, bump_enabled, bump_price, access_link, delivery_link, support_phone, support_number, thank_you_button_text, thank_you_url",
+    )
     .eq(isUuid ? "id" : "custom_url", productId)
     .single();
 
@@ -444,6 +477,11 @@ async function handleRequest(event: any) {
           success: true,
           saleId: (sale as any).id,
           transactionId: transactionId ? String(transactionId) : null,
+          // E2Payments confirms synchronously — include the final status and
+          // access links now so the client can redirect instantly instead of
+          // opening the poll loop just to re-discover what we already know.
+          status: gwStatus === "paid" ? "paid" : undefined,
+          product: gwStatus === "paid" ? buildProductAccessPayload(p) : undefined,
         }),
       };
     } catch (e: any) {
@@ -555,6 +593,10 @@ async function handleRequest(event: any) {
       success: true,
       saleId: (sale as any).id,
       transactionId: transactionId ? String(transactionId) : null,
+      // Same instant-redirect shortcut as the E2Payments branch above, for
+      // the case where PayFlax answered within the client wait budget.
+      status: gwStatus === "paid" ? "paid" : undefined,
+      product: gwStatus === "paid" ? buildProductAccessPayload(p) : undefined,
     }),
   };
 }

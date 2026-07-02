@@ -198,6 +198,54 @@ function CheckoutPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Fires the Purchase event and redirects to the product's access link.
+  // Shared by the instant-confirmation path (gateway answered inside
+  // apiProcessPayment) and the polling loop below (gateway confirmed later
+  // via the race-timeout / webhook path).
+  const confirmAndRedirect = (
+    saleId: string,
+    productAccess?: {
+      thank_you_url?: string | null;
+      access_link?: string | null;
+      delivery_link?: string | null;
+    } | null,
+  ) => {
+    // Fire the REAL Purchase event exactly once, deduped with the
+    // server-side CAPI call via `eventID = saleId`. Meta matches
+    // event_id within 48h and counts as a single Purchase.
+    trackEvent("Purchase", { content_ids: [product.id], content_type: "product" }, saleId);
+    setPaymentConfirmed(true);
+    setProcessingPayment(false);
+
+    const rawUrl =
+      productAccess?.thank_you_url?.trim() ||
+      productAccess?.access_link?.trim() ||
+      productAccess?.delivery_link?.trim() ||
+      "";
+    // Normalize: accept "site.com/x" by prepending https:// when scheme is missing.
+    let url = rawUrl;
+    if (url && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !url.startsWith("/")) {
+      url = `https://${url}`;
+    }
+    if (url) {
+      setPaymentStatusMessage("Pagamento confirmado. Redirecionando para o seu acesso...");
+      try {
+        // Use assign so the browser respects the new URL even if replace is blocked.
+        window.location.assign(url);
+      } catch {
+        window.location.href = url;
+      }
+      // Hard fallback if navigation is blocked or delayed.
+      setTimeout(() => {
+        if (!document.hidden) window.location.href = url;
+      }, 1500);
+    } else {
+      setPaymentStatusMessage(
+        "Pagamento confirmado com sucesso. Em instantes você receberá os detalhes de acesso.",
+      );
+    }
+  };
+
   // Poll sale status in-place after gateway dispatch — no redirect to a waiting page.
   useEffect(() => {
     if (!pendingSaleId) return;
@@ -223,44 +271,7 @@ function CheckoutPage() {
           if (cancelled) return;
           const status = String(r?.sale?.status ?? "").toLowerCase();
           if (TERMINAL_OK.includes(status)) {
-            // Fire the REAL Purchase event exactly once, deduped with the
-            // server-side CAPI call via `eventID = pendingSaleId`. Meta
-            // matches event_id within 48h and counts as a single Purchase.
-            trackEvent(
-              "Purchase",
-              { content_ids: [product.id], content_type: "product" },
-              pendingSaleId ?? undefined,
-            );
-            setPaymentConfirmed(true);
-            setProcessingPayment(false);
-
-            const rawUrl =
-              r?.product?.thank_you_url?.trim() ||
-              r?.product?.access_link?.trim() ||
-              r?.product?.delivery_link?.trim() ||
-              "";
-            // Normalize: accept "site.com/x" by prepending https:// when scheme is missing.
-            let url = rawUrl;
-            if (url && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !url.startsWith("/")) {
-              url = `https://${url}`;
-            }
-            if (url) {
-              setPaymentStatusMessage("Pagamento confirmado. Redirecionando para o seu acesso...");
-              try {
-                // Use assign so the browser respects the new URL even if replace is blocked.
-                window.location.assign(url);
-              } catch {
-                window.location.href = url;
-              }
-              // Hard fallback if navigation is blocked or delayed.
-              setTimeout(() => {
-                if (!document.hidden) window.location.href = url;
-              }, 1500);
-            } else {
-              setPaymentStatusMessage(
-                "Pagamento confirmado com sucesso. Em instantes você receberá os detalhes de acesso.",
-              );
-            }
+            confirmAndRedirect(pendingSaleId, r?.product);
             return;
           }
           if (TERMINAL_FAIL.includes(status)) {
@@ -425,10 +436,17 @@ function CheckoutPage() {
         return;
       }
 
-      // NOTE: do NOT fire 'Purchase' here — the gateway has only accepted
-      // the request, not confirmed payment. The real Purchase event is
-      // fired below, in the polling effect, when the sale reaches a
-      // TERMINAL_OK status. Dedup with CAPI uses `eventID = saleId`.
+      // Gateway already confirmed payment synchronously (E2Payments, or
+      // PayFlax answering within the wait budget) — redirect right away
+      // instead of opening the poll loop just to re-confirm what we know.
+      if (result.status === "paid") {
+        confirmAndRedirect(result.saleId, result.product);
+        return;
+      }
+
+      // Otherwise the gateway has only accepted the request so far; the
+      // real Purchase event fires from the polling effect once the sale
+      // reaches a TERMINAL_OK status. Dedup with CAPI uses `eventID = saleId`.
       setPaymentStatusMessage(
         `Pedido enviado para ${paymentMethod === "mpesa" ? "M-Pesa" : "e-Mola"}. Digite o PIN no seu telefone para concluir o pagamento.`,
       );
@@ -676,8 +694,16 @@ function CheckoutPage() {
                 )}
               </div>
             ) : paymentStatusMessage ? (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-medium text-emerald-700">
-                {paymentStatusMessage}
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-2.5 text-xs font-medium text-emerald-700">
+                {paymentConfirmed ? (
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-600" />
+                ) : (
+                  <span className="relative flex h-3.5 w-3.5 flex-shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-emerald-500" />
+                  </span>
+                )}
+                <span>{paymentStatusMessage}</span>
               </div>
             ) : null}
 
