@@ -18,6 +18,62 @@ const PAID_STATUSES = new Set(["paid", "approved", "success", "completed", "comp
 const FAILED_STATUSES = new Set(["failed", "failure", "error", "cancelled", "canceled", "rejected", "refused", "declined"]);
 const EXPIRED_STATUSES = new Set(["expired", "timeout", "timed_out"]);
 
+const E2P_BASE_URL = "https://e2payments.explicador.co.mz";
+
+async function getE2pAccessToken(clientId: string, clientSecret: string): Promise<string> {
+  const res = await fetch(`${E2P_BASE_URL}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+  });
+  const text = await res.text();
+  let json: Record<string, unknown> | null = null;
+  try { json = text ? JSON.parse(text) : null; } catch { /* noop */ }
+  if (!res.ok || !json?.access_token) {
+    throw new Error(`Falha ao autenticar com E2Payments (HTTP ${res.status}).`);
+  }
+  return String(json.access_token);
+}
+
+async function callE2pGateway(params: {
+  method: "mpesa" | "emola";
+  clientId: string;
+  clientSecret: string;
+  walletId: string;
+  amount: number;
+  phone: string;
+  reference: string;
+  customerName: string;
+}): Promise<{ ok: boolean; json: any; status: number }> {
+  const token = await getE2pAccessToken(params.clientId, params.clientSecret);
+  const endpoint =
+    params.method === "mpesa"
+      ? `${E2P_BASE_URL}/v1/c2b/mpesa-payment/${params.walletId}`
+      : `${E2P_BASE_URL}/v1/c2b/emola-payment/${params.walletId}`;
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      client_id: params.clientId,
+      amount: String(params.amount),
+      phone: params.phone,
+      reference: params.reference,
+      merchant_name: params.customerName.slice(0, 60) || "PaymentBlackMZ",
+      description: "Pagamento de produto digital",
+    }),
+  });
+
+  const text = await res.text();
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+  return { ok: res.ok, json, status: res.status };
+}
+
 function normalizeMozambicanPhone(raw: string): string {
   let digits = raw.replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
@@ -267,25 +323,19 @@ export const handler = async (event: any) => {
 
   // Resolve per-user gateway override (doc-based or E2Payments)
   const uc = (userCfgRes as any).data as any;
+  let e2p: { clientId: string; clientSecret: string; walletId: string } | null = null;
   if (uc?.doc_enabled && uc?.doc_credentials?.api_key) {
     // User has a document-based config active: override API key / base URL
     const creds = uc.doc_credentials as Record<string, string>;
     if (creds.api_key) apiKey = creds.api_key;
     if (creds.base_url) baseUrl = creds.base_url.trim().replace(/\/+$/, "").replace(/\/api\/pay$/i, "");
   } else if (uc?.e2p_enabled) {
-    // E2Payments override: swap out the wallet payout number for the user-configured one
-    const e2pWallet = method === "mpesa" ? uc.e2p_mpesa_wallet : uc.e2p_emola_wallet;
-    if (e2pWallet) {
-      // The E2Payments gateway uses the same PayFlax-compatible endpoint format;
-      // credentials and wallet override come from the user's stored config.
-      const e2pClientId     = method === "mpesa" ? uc.e2p_mpesa_client_id     : uc.e2p_emola_client_id;
-      const e2pClientSecret = method === "mpesa" ? uc.e2p_mpesa_client_secret : uc.e2p_emola_client_secret;
-      if (e2pClientId) apiKey = e2pClientId;
-      if (e2pClientSecret) {
-        // Combine client_id:client_secret as Bearer token for E2Payments auth
-        apiKey = `${e2pClientId}:${e2pClientSecret}`;
-      }
-      baseUrl = "https://api.e2payments.explicatis.com/v1";
+    // E2Payments override: use the user-configured Client ID/Secret/Wallet for this method
+    const walletId = method === "mpesa" ? uc.e2p_mpesa_wallet : uc.e2p_emola_wallet;
+    const clientId = method === "mpesa" ? uc.e2p_mpesa_client_id : uc.e2p_emola_client_id;
+    const clientSecret = method === "mpesa" ? uc.e2p_mpesa_client_secret : uc.e2p_emola_client_secret;
+    if (walletId && clientId && clientSecret) {
+      e2p = { clientId, clientSecret, walletId };
     }
   }
 
@@ -331,6 +381,61 @@ export const handler = async (event: any) => {
       headers: CORS,
       body: JSON.stringify({ success: false, error: "Não foi possível registar a venda." }),
     };
+  }
+
+  // E2Payments override: call the real E2Payments API (OAuth2 + wallet-specific endpoint)
+  if (e2p) {
+    try {
+      const { ok, json: gwJson, status } = await callE2pGateway({
+        method: method as "mpesa" | "emola",
+        clientId: e2p.clientId,
+        clientSecret: e2p.clientSecret,
+        walletId: e2p.walletId,
+        amount,
+        phone: gatewayPhone,
+        reference,
+        customerName: finalCustomerName,
+      });
+
+      const gwStatus = normalizeGatewayStatus(gwJson, ok);
+      const transactionId = readTransactionId(gwJson);
+
+      if (gwStatus === "paid") {
+        await supabase
+          .from("sales")
+          .update({ status: "paid", transaction_id: transactionId ? String(transactionId) : null })
+          .eq("id", (sale as any).id);
+      } else if (gwStatus === "failed" || gwStatus === "expired") {
+        const errMsg = gwJson?.message || gwJson?.error || gwJson?.data?.message || gwJson?.transacao?.message
+          || (gwStatus === "expired" ? "Pagamento expirado." : `Pagamento recusado pelo gateway (HTTP ${status}).`);
+        await supabase
+          .from("sales")
+          .update({ status: gwStatus, status_reason: String(errMsg).slice(0, 500) })
+          .eq("id", (sale as any).id);
+        return {
+          statusCode: 200,
+          headers: CORS,
+          body: JSON.stringify({ success: false, saleId: (sale as any).id, error: String(errMsg) }),
+        };
+      }
+
+      return {
+        statusCode: 200,
+        headers: CORS,
+        body: JSON.stringify({
+          success: true,
+          saleId: (sale as any).id,
+          transactionId: transactionId ? String(transactionId) : null,
+        }),
+      };
+    } catch (e: any) {
+      console.error("e2payment gateway error", e);
+      return {
+        statusCode: 200,
+        headers: CORS,
+        body: JSON.stringify({ success: true, saleId: (sale as any).id, transactionId: null }),
+      };
+    }
   }
 
   // Call PayFlax gateway

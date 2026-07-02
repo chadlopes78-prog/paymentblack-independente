@@ -65,6 +65,15 @@ function parseDocCredentials(raw: string): Record<string, string> | null {
 }
 
 export const handler = async (event: any) => {
+  try {
+    return await handleRequest(event);
+  } catch (e: any) {
+    console.error("api-payment-config unhandled error", e);
+    return err("Erro no servidor: " + (e?.message || String(e)), 500);
+  }
+};
+
+async function handleRequest(event: any) {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS, body: "" };
   }
@@ -192,4 +201,4 @@ export const handler = async (event: any) => {
   }
 
   return err("Ação inválida.");
-};
+}

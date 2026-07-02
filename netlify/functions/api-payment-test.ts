@@ -22,7 +22,7 @@ function fail(msg: string, status = 400) {
 }
 
 // E2Payments authentication endpoint (OAuth2 client credentials)
-const E2P_TOKEN_URL = "https://api.e2payments.explicatis.com/v1/oauth/token";
+const E2P_TOKEN_URL = "https://e2payments.explicador.co.mz/oauth/token";
 const E2P_TIMEOUT_MS = 8_000;
 
 async function testE2pCredentials(
@@ -36,8 +36,8 @@ async function testE2pCredentials(
     const res = await fetch(E2P_TOKEN_URL, {
       method: "POST",
       signal: controller.signal,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
         grant_type: "client_credentials",
         client_id: clientId,
         client_secret: clientSecret,
@@ -62,6 +62,15 @@ async function testE2pCredentials(
 }
 
 export const handler = async (event: any) => {
+  try {
+    return await handleRequest(event);
+  } catch (e: any) {
+    console.error("api-payment-test unhandled error", e);
+    return fail("Erro no servidor: " + (e?.message || String(e)), 500);
+  }
+};
+
+async function handleRequest(event: any) {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS, body: "" };
   }
@@ -119,4 +128,4 @@ export const handler = async (event: any) => {
   }
 
   return ok({ success: true, status: "connected" });
-};
+}
