@@ -254,7 +254,12 @@ function CheckoutPage() {
     if (!pendingSaleId) return;
     let cancelled = false;
     let attempts = 0;
-    const MAX = 180;
+    // Must stay below the 14-minute server-side auto-expire in
+    // api-payment-status.ts, so the server (which is the only thing that
+    // actually knows whether E2Payments confirmed the payment) always has
+    // the last word — the client should basically never hit its own MAX
+    // and have to guess.
+    const MAX = 540;
     const TERMINAL_OK = ["paid", "approved", "success", "completed"];
     const TERMINAL_FAIL = ["failed", "expired", "cancelled", "canceled"];
     (async () => {
@@ -298,7 +303,9 @@ function CheckoutPage() {
       if (!cancelled) {
         setProcessingPayment(false);
         setPaymentStatusMessage(null);
-        setPaymentErrorMessage("Pagamento não confirmado. Tente novamente ou escolha outro método.");
+        setPaymentErrorMessage(
+          "Ainda não recebemos confirmação da operadora. Se o valor foi debitado da sua carteira, contacte o suporte antes de tentar pagar novamente.",
+        );
         setPaymentErrorCode("timeout");
         setPaymentRetryable(true);
         setPendingSaleId(null);

@@ -1,5 +1,6 @@
 import { ensureWebSocket } from "./_ws-polyfill";
 import { createClient } from "@supabase/supabase-js";
+import { buildProductAccessPayload } from "./_e2p";
 
 ensureWebSocket();
 
@@ -20,110 +21,6 @@ const PLATFORM_PAYOUT: Record<string, string> = {
 const PAID_STATUSES = new Set(["paid", "approved", "success", "completed", "complete", "confirmed"]);
 const FAILED_STATUSES = new Set(["failed", "failure", "error", "cancelled", "canceled", "rejected", "refused", "declined"]);
 const EXPIRED_STATUSES = new Set(["expired", "timeout", "timed_out"]);
-
-const E2P_BASE_URL = "https://e2payments.explicador.co.mz";
-
-// Reused across invocations on a warm Lambda container — saves a full
-// OAuth round-trip (typically 150-400ms) on every payment after the first.
-// Keyed by clientId since different sellers have different credentials.
-const e2pTokenCache = new Map<string, { value: string; expiresAt: number }>();
-
-async function getE2pAccessToken(clientId: string, clientSecret: string): Promise<string> {
-  const cached = e2pTokenCache.get(clientId);
-  if (cached && cached.expiresAt > Date.now() + 30_000) {
-    return cached.value;
-  }
-
-  const res = await fetch(`${E2P_BASE_URL}/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
-  });
-  const text = await res.text();
-  let json: Record<string, unknown> | null = null;
-  try { json = text ? JSON.parse(text) : null; } catch { /* noop */ }
-  if (!res.ok || !json?.access_token) {
-    throw new Error(`Falha ao autenticar com E2Payments (HTTP ${res.status}).`);
-  }
-
-  const expiresInMs = (Number(json.expires_in) || 3600) * 1000;
-  const token = String(json.access_token);
-  e2pTokenCache.set(clientId, { value: token, expiresAt: Date.now() + expiresInMs });
-  return token;
-}
-
-async function callE2pGateway(params: {
-  method: "mpesa" | "emola";
-  clientId: string;
-  clientSecret: string;
-  walletId: string;
-  amount: number;
-  phone: string;
-  reference: string;
-  customerName: string;
-  // Optional: a token fetch already kicked off earlier (e.g. in parallel
-  // with the sale insert) so we don't pay for it sequentially here.
-  tokenPromise?: Promise<string>;
-}): Promise<{ ok: boolean; json: any; status: number }> {
-  const token = await (params.tokenPromise ?? getE2pAccessToken(params.clientId, params.clientSecret));
-  const endpoint =
-    params.method === "mpesa"
-      ? `${E2P_BASE_URL}/v1/c2b/mpesa-payment/${params.walletId}`
-      : `${E2P_BASE_URL}/v1/c2b/emola-payment/${params.walletId}`;
-
-  // E2Payments answers synchronously once the customer confirms/declines
-  // the PIN, which can take a while — but Netlify kills the whole function
-  // at its own timeout regardless (10s by default, up to 26s configured in
-  // netlify.toml). Bail out on OUR terms a little earlier so we always
-  // return a clean, informative response instead of the platform cutting
-  // the connection mid-request and leaving the client hanging.
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 22_000);
-
-  try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        client_id: params.clientId,
-        amount: String(params.amount),
-        phone: params.phone,
-        reference: params.reference,
-        merchant_name: params.customerName.slice(0, 60) || "PaymentBlackMZ",
-        description: "Pagamento de produto digital",
-      }),
-      signal: controller.signal,
-    });
-
-    const text = await res.text();
-    let json: any = null;
-    try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
-    return { ok: res.ok, json, status: res.status };
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-/**
- * Builds the same product-access shape the frontend expects from
- * api-payment-status, so a synchronously-confirmed payment (E2Payments,
- * or PayFlax responding within the client wait budget) can redirect the
- * customer immediately instead of waiting for the poll loop to catch up.
- */
-function buildProductAccessPayload(p: any) {
-  return {
-    access_link: p.access_link ?? null,
-    delivery_link: p.delivery_link ?? null,
-    support_phone: p.support_phone ?? null,
-    support_number: p.support_number ?? null,
-    thank_you_button_text: p.thank_you_button_text ?? null,
-    thank_you_url: p.thank_you_url ?? null,
-  };
-}
 
 function normalizeMozambicanPhone(raw: string): string {
   let digits = raw.replace(/\D/g, "");
@@ -407,14 +304,6 @@ async function handleRequest(event: any) {
     };
   }
 
-  // Kick off the E2Payments OAuth token fetch now, in parallel with the sale
-  // insert below, instead of waiting for the insert to finish first. Saves
-  // a full sequential round-trip (~100-300ms) off the critical path before
-  // the STK push reaches the customer's phone. Errors are handled when the
-  // promise is actually awaited inside callE2pGateway.
-  const e2pTokenPromise = e2p ? getE2pAccessToken(e2p.clientId, e2p.clientSecret) : null;
-  if (e2pTokenPromise) e2pTokenPromise.catch(() => {});
-
   const finalTrafficPageId = (trafficRes as any).data?.id ?? null;
   const finalCustomerName = contactPhone
     ? `${String(customerName).trim()} (contacto: ${String(contactPhone).trim()})`
@@ -459,77 +348,98 @@ async function handleRequest(event: any) {
     };
   }
 
-  // E2Payments override: call the real E2Payments API (OAuth2 + wallet-specific endpoint)
+  // E2Payments override: hand the actual confirmation wait off to a
+  // Background Function (up to 15 min runtime, never aborted early) so we
+  // can NEVER end up in the state "money left the customer's wallet but we
+  // told them the purchase failed". We only wait briefly here to answer
+  // fast when the customer confirms quickly (the common case), then fall
+  // back to the client's existing poll loop — which will only ever see a
+  // final status once the background job has genuinely confirmed it.
   if (e2p) {
-    try {
-      const { ok, json: gwJson, status } = await callE2pGateway({
-        method: method as "mpesa" | "emola",
-        clientId: e2p.clientId,
-        clientSecret: e2p.clientSecret,
-        walletId: e2p.walletId,
-        amount,
-        phone: gatewayPhone,
-        reference,
-        customerName: finalCustomerName,
-        tokenPromise: e2pTokenPromise ?? undefined,
-      });
+    const host = event.headers?.["x-forwarded-host"] || event.headers?.host || "";
+    const proto = event.headers?.["x-forwarded-proto"] || "https";
 
-      const gwStatus = normalizeGatewayStatus(gwJson, ok);
-      const transactionId = readTransactionId(gwJson);
+    if (host) {
+      try {
+        // Resolve the token in parallel with kicking off the background
+        // job isn't needed here — the background job resolves its own
+        // token. We just need the background invocation to be accepted;
+        // Netlify ACKs background functions with 202 essentially instantly.
+        await fetch(`${proto}://${host}/.netlify/functions/api-payment-confirm-background`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            saleId: (sale as any).id,
+            method,
+            clientId: e2p.clientId,
+            clientSecret: e2p.clientSecret,
+            walletId: e2p.walletId,
+            amount,
+            phone: gatewayPhone,
+            reference,
+            customerName: finalCustomerName,
+          }),
+        });
+      } catch (e) {
+        // If we can't even reach our own background function endpoint,
+        // fall through — the sale stays "pending" and the client will
+        // simply poll without ever getting a final answer. Logged loudly
+        // since this would need infra attention.
+        console.error("[api-payment] failed to dispatch confirm-background", e);
+      }
+    } else {
+      console.error("[api-payment] no host header — cannot dispatch confirm-background", { saleId: (sale as any).id });
+    }
 
-      if (gwStatus === "paid") {
-        await supabase
-          .from("sales")
-          .update({ status: "paid", transaction_id: transactionId ? String(transactionId) : null })
-          .eq("id", (sale as any).id);
-      } else if (gwStatus === "failed" || gwStatus === "expired") {
-        const errMsg = gwJson?.message || gwJson?.error || gwJson?.data?.message || gwJson?.transacao?.message
-          || (gwStatus === "expired" ? "Pagamento expirado." : `Pagamento recusado pelo gateway (HTTP ${status}).`);
-        await supabase
-          .from("sales")
-          .update({ status: gwStatus, status_reason: String(errMsg).slice(0, 500) })
-          .eq("id", (sale as any).id);
+    // Short bounded poll: catches the common "customer confirms in a few
+    // seconds" case so we can answer instantly, WITHOUT ever holding our
+    // own connection open to E2Payments (that connection belongs solely
+    // to the background job now).
+    const POLL_ATTEMPTS = 6;
+    const POLL_INTERVAL_MS = 700;
+    for (let i = 0; i < POLL_ATTEMPTS; i++) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      const { data: polled } = await supabase
+        .from("sales")
+        .select("status, status_reason, transaction_id")
+        .eq("id", (sale as any).id)
+        .maybeSingle();
+      const polledStatus = String((polled as any)?.status ?? "").toLowerCase();
+
+      if (polledStatus === "paid") {
         return {
           statusCode: 200,
           headers: CORS,
-          body: JSON.stringify({ success: false, saleId: (sale as any).id, error: String(errMsg) }),
+          body: JSON.stringify({
+            success: true,
+            saleId: (sale as any).id,
+            transactionId: (polled as any)?.transaction_id ?? null,
+            status: "paid",
+            product: buildProductAccessPayload(p),
+          }),
         };
       }
-
-      return {
-        statusCode: 200,
-        headers: CORS,
-        body: JSON.stringify({
-          success: true,
-          saleId: (sale as any).id,
-          transactionId: transactionId ? String(transactionId) : null,
-          // E2Payments confirms synchronously — include the final status and
-          // access links now so the client can redirect instantly instead of
-          // opening the poll loop just to re-discover what we already know.
-          status: gwStatus === "paid" ? "paid" : undefined,
-          product: gwStatus === "paid" ? buildProductAccessPayload(p) : undefined,
-        }),
-      };
-    } catch (e: any) {
-      // We genuinely don't know the outcome here (network error, or our own
-      // 22s guard tripped while E2Payments was still waiting on the
-      // customer's PIN) — money may or may not have moved. Claiming
-      // "failed" would be actively wrong if the payment actually went
-      // through a moment later, so we deliberately leave the sale as
-      // "pending": the client's poll loop keeps checking, and the existing
-      // 2-minute auto-expire in api-payment-status.ts gives a definitive
-      // answer either way instead of hanging forever.
-      const isTimeout = e?.name === "AbortError";
-      console.error(
-        isTimeout ? "e2payment gateway timeout (22s guard tripped)" : "e2payment gateway error",
-        e,
-      );
-      return {
-        statusCode: 200,
-        headers: CORS,
-        body: JSON.stringify({ success: true, saleId: (sale as any).id, transactionId: null }),
-      };
+      if (polledStatus === "failed" || polledStatus === "expired") {
+        return {
+          statusCode: 200,
+          headers: CORS,
+          body: JSON.stringify({
+            success: false,
+            saleId: (sale as any).id,
+            error: (polled as any)?.status_reason || "Pagamento não confirmado pelo gateway.",
+          }),
+        };
+      }
     }
+
+    // Still pending after the short wait — hand off to the client's
+    // existing poll loop. The background job keeps running independently
+    // and is the only thing that will ever flip this sale's final status.
+    return {
+      statusCode: 200,
+      headers: CORS,
+      body: JSON.stringify({ success: true, saleId: (sale as any).id, transactionId: null }),
+    };
   }
 
   // Call PayFlax gateway

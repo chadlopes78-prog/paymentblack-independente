@@ -77,18 +77,26 @@ async function handleRequest(event: any) {
 
   const saleRow = sale as any;
 
-  // Auto-expire pending sales older than 2 minutes
+  // Auto-expire pending sales that have been open far longer than any
+  // realistic confirmation window. This MUST stay comfortably above the
+  // 12-minute safety net used by api-payment-confirm-background.ts —
+  // that background job is the sole authority on whether an E2Payments
+  // sale actually succeeded or failed, and it can legitimately still be
+  // waiting on a slow customer well past 2 minutes. Expiring too early
+  // here is exactly how you end up telling a customer "purchase failed"
+  // after their wallet was already charged.
   const currentStatus = String(saleRow.status ?? "").toLowerCase();
   const pendingAgeMs = saleRow.created_at
     ? Date.now() - new Date(saleRow.created_at).getTime()
     : 0;
 
-  if (currentStatus === "pending" && pendingAgeMs > 2 * 60_000) {
+  if (currentStatus === "pending" && pendingAgeMs > 14 * 60_000) {
     await supabase
       .from("sales")
       .update({
         status: "expired",
-        status_reason: "Pagamento não confirmado a tempo. Provável cancelamento ou PIN não inserido.",
+        status_reason:
+          "Não recebemos confirmação da operadora a tempo. Se o valor foi debitado da sua carteira, contacte o suporte antes de tentar novamente.",
       })
       .eq("id", saleId)
       .eq("status", "pending");
