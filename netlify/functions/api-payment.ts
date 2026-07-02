@@ -390,13 +390,22 @@ async function handleRequest(event: any) {
     });
 
     try {
+      // E2Payments expects the LOCAL 9-digit format (no 258 prefix) for
+      // BOTH M-Pesa and e-Mola. `gatewayPhone` above is tuned for PayFlax,
+      // which expects the full 258-prefixed number for M-Pesa specifically
+      // — reusing it here silently sent the wrong phone format to
+      // E2Payments for M-Pesa payments, which likely never dispatched a
+      // real STK push at all (the gateway has no reason to answer a
+      // malformed phone, so the request could just hang or go nowhere
+      // instead of returning a clear error).
+      const e2pPhone = msisdn.slice(3);
       const { ok, json: gwJson, status, timedOut } = await callE2pGateway({
         method: method as "mpesa" | "emola",
         clientId: e2p.clientId,
         clientSecret: e2p.clientSecret,
         walletId: e2p.walletId,
         amount,
-        phone: gatewayPhone,
+        phone: e2pPhone,
         reference,
         customerName: finalCustomerName,
         // Conservative: stays well under Netlify's default 10s function
