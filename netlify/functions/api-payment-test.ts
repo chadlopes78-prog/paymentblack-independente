@@ -78,8 +78,14 @@ async function handleRequest(event: any) {
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey     = process.env.SUPABASE_PUBLISHABLE_KEY || "";
+  const anonKey     = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
   if (!supabaseUrl || !serviceKey) return fail("Servidor não configurado.", 500);
+  if (!anonKey) {
+    return fail(
+      "Servidor não configurado: falta a variável de ambiente SUPABASE_PUBLISHABLE_KEY no Netlify.",
+      500,
+    );
+  }
 
   const authHeader = event.headers?.authorization || event.headers?.Authorization || "";
   const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();

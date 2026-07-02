@@ -88,7 +88,13 @@ async function handleRequest(event: any) {
   const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!jwt) return err("Não autenticado.", 401);
 
-  const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY || "";
+  const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
+  if (!anonKey) {
+    return err(
+      "Servidor não configurado: falta a variável de ambiente SUPABASE_PUBLISHABLE_KEY no Netlify.",
+      500,
+    );
+  }
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
     auth: { persistSession: false, autoRefreshToken: false },
