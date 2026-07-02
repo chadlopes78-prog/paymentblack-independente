@@ -71,27 +71,41 @@ async function callE2pGateway(params: {
       ? `${E2P_BASE_URL}/v1/c2b/mpesa-payment/${params.walletId}`
       : `${E2P_BASE_URL}/v1/c2b/emola-payment/${params.walletId}`;
 
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      client_id: params.clientId,
-      amount: String(params.amount),
-      phone: params.phone,
-      reference: params.reference,
-      merchant_name: params.customerName.slice(0, 60) || "PaymentBlackMZ",
-      description: "Pagamento de produto digital",
-    }),
-  });
+  // E2Payments answers synchronously once the customer confirms/declines
+  // the PIN, which can take a while — but Netlify kills the whole function
+  // at its own timeout regardless (10s by default, up to 26s configured in
+  // netlify.toml). Bail out on OUR terms a little earlier so we always
+  // return a clean, informative response instead of the platform cutting
+  // the connection mid-request and leaving the client hanging.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 22_000);
 
-  const text = await res.text();
-  let json: any = null;
-  try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
-  return { ok: res.ok, json, status: res.status };
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        client_id: params.clientId,
+        amount: String(params.amount),
+        phone: params.phone,
+        reference: params.reference,
+        merchant_name: params.customerName.slice(0, 60) || "PaymentBlackMZ",
+        description: "Pagamento de produto digital",
+      }),
+      signal: controller.signal,
+    });
+
+    const text = await res.text();
+    let json: any = null;
+    try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+    return { ok: res.ok, json, status: res.status };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /**
@@ -497,7 +511,19 @@ async function handleRequest(event: any) {
         }),
       };
     } catch (e: any) {
-      console.error("e2payment gateway error", e);
+      // We genuinely don't know the outcome here (network error, or our own
+      // 22s guard tripped while E2Payments was still waiting on the
+      // customer's PIN) — money may or may not have moved. Claiming
+      // "failed" would be actively wrong if the payment actually went
+      // through a moment later, so we deliberately leave the sale as
+      // "pending": the client's poll loop keeps checking, and the existing
+      // 2-minute auto-expire in api-payment-status.ts gives a definitive
+      // answer either way instead of hanging forever.
+      const isTimeout = e?.name === "AbortError";
+      console.error(
+        isTimeout ? "e2payment gateway timeout (22s guard tripped)" : "e2payment gateway error",
+        e,
+      );
       return {
         statusCode: 200,
         headers: CORS,
