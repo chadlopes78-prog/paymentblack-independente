@@ -235,14 +235,6 @@ async function handleRequest(event: any) {
     }
   }
 
-  if (!apiKey) {
-    return {
-      statusCode: 200,
-      headers: CORS,
-      body: JSON.stringify({ success: false, code: "config", retryable: false, error: "Gateway de pagamento não configurado no servidor." }),
-    };
-  }
-
   // Product lookup
   const isUuid = UUID_RE.test(productId);
   const { data: product, error: productError } = await supabase
@@ -353,6 +345,16 @@ async function handleRequest(event: any) {
     if (walletId && clientId && clientSecret) {
       e2p = { clientId, clientSecret, walletId };
     }
+  }
+
+  // Only fail now: neither the platform gateway (PayFlax) nor a per-user
+  // override (document-based or E2Payments) is available for this sale.
+  if (!apiKey && !e2p) {
+    return {
+      statusCode: 200,
+      headers: CORS,
+      body: JSON.stringify({ success: false, code: "config", retryable: false, error: "Gateway de pagamento não configurado no servidor." }),
+    };
   }
 
   const finalTrafficPageId = (trafficRes as any).data?.id ?? null;
