@@ -10,7 +10,10 @@
  *   { action: "stats" }
  */
 
+import { ensureWebSocket } from "./_ws-polyfill";
 import { createClient } from "@supabase/supabase-js";
+
+ensureWebSocket();
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
