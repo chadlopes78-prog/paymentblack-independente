@@ -9,11 +9,14 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  # No custom timeout needed: api-payment.ts only does a short bounded poll
-  # (~4s) against our own database now. The actual E2Payments confirmation
-  # wait — which can legitimately take much longer — happens entirely
-  # inside api-payment-confirm-background.ts, a Background Function that
-  # runs decoupled from this request for up to 15 minutes.
+  # api-payment.ts calls the E2Payments gateway synchronously and waits for
+  # the customer's PIN confirmation, bounded to ~8.5s (see
+  # netlify/functions/lib/e2p.ts safetyNetTimeoutMs) — safely under
+  # Netlify's default 10s function timeout. If your plan/site is
+  # configured for a longer function timeout (Site configuration →
+  # Functions in the Netlify dashboard — this cannot be set via
+  # netlify.toml), raise safetyNetTimeoutMs accordingly to give slower
+  # confirmations more room before the client falls back to polling.
 
 [[redirects]]
   from = "/*"

@@ -1,6 +1,11 @@
 import { ensureWebSocket } from "./lib/ws-polyfill";
 import { createClient } from "@supabase/supabase-js";
-import { buildProductAccessPayload } from "./lib/e2p";
+import {
+  buildProductAccessPayload,
+  callE2pGateway,
+  setGatewayLogSink,
+  type GatewayLogEntry,
+} from "./lib/e2p";
 
 ensureWebSocket();
 
@@ -348,98 +353,112 @@ async function handleRequest(event: any) {
     };
   }
 
-  // E2Payments override: hand the actual confirmation wait off to a
-  // Background Function (up to 15 min runtime, never aborted early) so we
-  // can NEVER end up in the state "money left the customer's wallet but we
-  // told them the purchase failed". We only wait briefly here to answer
-  // fast when the customer confirms quickly (the common case), then fall
-  // back to the client's existing poll loop — which will only ever see a
-  // final status once the background job has genuinely confirmed it.
+  // E2Payments override: call the gateway directly, synchronously, in THIS
+  // request. We tried delegating this to a separate Background Function so
+  // we could wait as long as needed without any abort — but production
+  // logs showed the OAuth token step completing and logging fine, then the
+  // actual payment call never logging anything at all, even many minutes
+  // later (no success, no error, no timeout entry). That means the
+  // background invocation's process was being killed/frozen by the
+  // platform before it could finish — worse than useless, since it made
+  // the sale unrecoverable with no log trail at all.
+  //
+  // A function that is actively serving the client's own HTTP request is
+  // the one execution context Netlify is contractually required to keep
+  // alive until it returns a response — there is no ambiguity there. So we
+  // call the gateway directly here, bounded by a conservative timeout that
+  // stays safely under Netlify's default 10s function ceiling, and log
+  // every attempt so failures are always diagnosable from payment_gateway_logs.
   if (e2p) {
-    const host = event.headers?.["x-forwarded-host"] || event.headers?.host || "";
-    const proto = event.headers?.["x-forwarded-proto"] || "https";
-
-    if (host) {
-      try {
-        // Resolve the token in parallel with kicking off the background
-        // job isn't needed here — the background job resolves its own
-        // token. We just need the background invocation to be accepted;
-        // Netlify ACKs background functions with 202 essentially instantly.
-        await fetch(`${proto}://${host}/.netlify/functions/api-payment-confirm-background`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            saleId: (sale as any).id,
-            method,
-            clientId: e2p.clientId,
-            clientSecret: e2p.clientSecret,
-            walletId: e2p.walletId,
-            amount,
-            phone: gatewayPhone,
-            reference,
-            customerName: finalCustomerName,
-          }),
+    setGatewayLogSink((entry: GatewayLogEntry) => {
+      supabase
+        .from("payment_gateway_logs")
+        .insert({
+          sale_id: (sale as any).id,
+          gateway: "e2payments",
+          direction: entry.direction,
+          endpoint: entry.endpoint,
+          http_status: entry.httpStatus,
+          duration_ms: entry.durationMs,
+          ok: entry.ok,
+          error: entry.error ?? null,
+          response_body: entry.responseBody ?? null,
+        })
+        .then(({ error }) => {
+          if (error) console.error("[api-payment] failed to write gateway log", error);
         });
-      } catch (e) {
-        // If we can't even reach our own background function endpoint,
-        // fall through — the sale stays "pending" and the client will
-        // simply poll without ever getting a final answer. Logged loudly
-        // since this would need infra attention.
-        console.error("[api-payment] failed to dispatch confirm-background", e);
-      }
-    } else {
-      console.error("[api-payment] no host header — cannot dispatch confirm-background", { saleId: (sale as any).id });
-    }
+    });
 
-    // Short bounded poll: catches the common "customer confirms in a few
-    // seconds" case so we can answer instantly, WITHOUT ever holding our
-    // own connection open to E2Payments (that connection belongs solely
-    // to the background job now).
-    const POLL_ATTEMPTS = 6;
-    const POLL_INTERVAL_MS = 700;
-    for (let i = 0; i < POLL_ATTEMPTS; i++) {
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-      const { data: polled } = await supabase
-        .from("sales")
-        .select("status, status_reason, transaction_id")
-        .eq("id", (sale as any).id)
-        .maybeSingle();
-      const polledStatus = String((polled as any)?.status ?? "").toLowerCase();
+    try {
+      const { ok, json: gwJson, status, timedOut } = await callE2pGateway({
+        method: method as "mpesa" | "emola",
+        clientId: e2p.clientId,
+        clientSecret: e2p.clientSecret,
+        walletId: e2p.walletId,
+        amount,
+        phone: gatewayPhone,
+        reference,
+        customerName: finalCustomerName,
+        // Conservative: stays well under Netlify's default 10s function
+        // timeout so we ALWAYS get to return a clean response ourselves,
+        // instead of the platform cutting the connection first.
+        safetyNetTimeoutMs: 8_500,
+      });
 
-      if (polledStatus === "paid") {
+      if (timedOut) {
+        // Genuinely don't know the outcome — money may or may not have
+        // moved. Never claim failure here; leave the sale pending and let
+        // the client's poll loop + the 14-minute server-side auto-expire
+        // in api-payment-status.ts be the final word.
         return {
           statusCode: 200,
           headers: CORS,
-          body: JSON.stringify({
-            success: true,
-            saleId: (sale as any).id,
-            transactionId: (polled as any)?.transaction_id ?? null,
-            status: "paid",
-            product: buildProductAccessPayload(p),
-          }),
+          body: JSON.stringify({ success: true, saleId: (sale as any).id, transactionId: null }),
         };
       }
-      if (polledStatus === "failed" || polledStatus === "expired") {
+
+      const gwStatus = normalizeGatewayStatus(gwJson, ok);
+      const transactionId = readTransactionId(gwJson);
+
+      if (gwStatus === "paid") {
+        await supabase
+          .from("sales")
+          .update({ status: "paid", transaction_id: transactionId ? String(transactionId) : null })
+          .eq("id", (sale as any).id);
+      } else if (gwStatus === "failed" || gwStatus === "expired") {
+        const errMsg = gwJson?.message || gwJson?.error || gwJson?.data?.message || gwJson?.transacao?.message
+          || (gwStatus === "expired" ? "Pagamento expirado." : `Pagamento recusado pelo gateway (HTTP ${status}).`);
+        await supabase
+          .from("sales")
+          .update({ status: gwStatus, status_reason: String(errMsg).slice(0, 500) })
+          .eq("id", (sale as any).id);
         return {
           statusCode: 200,
           headers: CORS,
-          body: JSON.stringify({
-            success: false,
-            saleId: (sale as any).id,
-            error: (polled as any)?.status_reason || "Pagamento não confirmado pelo gateway.",
-          }),
+          body: JSON.stringify({ success: false, saleId: (sale as any).id, error: String(errMsg) }),
         };
       }
-    }
 
-    // Still pending after the short wait — hand off to the client's
-    // existing poll loop. The background job keeps running independently
-    // and is the only thing that will ever flip this sale's final status.
-    return {
-      statusCode: 200,
-      headers: CORS,
-      body: JSON.stringify({ success: true, saleId: (sale as any).id, transactionId: null }),
-    };
+      return {
+        statusCode: 200,
+        headers: CORS,
+        body: JSON.stringify({
+          success: true,
+          saleId: (sale as any).id,
+          transactionId: transactionId ? String(transactionId) : null,
+          status: gwStatus === "paid" ? "paid" : undefined,
+          product: gwStatus === "paid" ? buildProductAccessPayload(p) : undefined,
+        }),
+      };
+    } catch (e: any) {
+      console.error("e2payment gateway error", e);
+      // Same principle: don't know the outcome, don't claim failure.
+      return {
+        statusCode: 200,
+        headers: CORS,
+        body: JSON.stringify({ success: true, saleId: (sale as any).id, transactionId: null }),
+      };
+    }
   }
 
   // Call PayFlax gateway
