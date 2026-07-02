@@ -262,6 +262,31 @@ function CheckoutPage() {
     const MAX = 540;
     const TERMINAL_OK = ["paid", "approved", "success", "completed"];
     const TERMINAL_FAIL = ["failed", "expired", "cancelled", "canceled"];
+
+    // Mobile browsers throttle (or fully pause) setTimeout in a backgrounded
+    // tab — exactly what happens while the customer is off confirming the
+    // PIN in their phone's native M-Pesa/e-Mola prompt or SMS app. Without
+    // this, the poll loop can go silent for the whole time the tab is
+    // hidden, and the customer comes back to a stale "processando" screen
+    // that only recovers on manual refresh. Racing the wait against
+    // "tab became visible again" forces an immediate re-check instead.
+    let wakeOnVisible: (() => void) | null = null;
+    const onVisibilityChange = () => {
+      if (!document.hidden) wakeOnVisible?.();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    const waitOrWake = (ms: number) =>
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, ms);
+        wakeOnVisible = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      }).finally(() => {
+        wakeOnVisible = null;
+      });
+
     (async () => {
       while (!cancelled && attempts < MAX) {
         attempts++;
@@ -298,7 +323,7 @@ function CheckoutPage() {
         } catch (e) {
           console.error("[checkout] poll error", e);
         }
-        await new Promise((r) => setTimeout(r, attempts < 20 ? 700 : 1500));
+        await waitOrWake(attempts < 20 ? 700 : 1500);
       }
       if (!cancelled) {
         setProcessingPayment(false);
@@ -312,7 +337,11 @@ function CheckoutPage() {
         setFailureModalOpen(true);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      wakeOnVisible?.();
+    };
   }, [pendingSaleId]);
 
 
