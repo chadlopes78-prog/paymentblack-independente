@@ -13,14 +13,14 @@
  * so there is no scenario where the customer's wallet gets charged but we
  * still report the sale as failed due to us giving up on the connection.
  */
-import { ensureWebSocket } from "./_ws-polyfill";
+import { ensureWebSocket } from "./lib/ws-polyfill";
 import { createClient } from "@supabase/supabase-js";
 import {
   callE2pGateway,
   getE2pAccessToken,
   normalizeGatewayStatus,
   readTransactionId,
-} from "./_e2p";
+} from "./lib/e2p";
 
 ensureWebSocket();
 

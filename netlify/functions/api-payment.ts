@@ -1,6 +1,6 @@
-import { ensureWebSocket } from "./_ws-polyfill";
+import { ensureWebSocket } from "./lib/ws-polyfill";
 import { createClient } from "@supabase/supabase-js";
-import { buildProductAccessPayload } from "./_e2p";
+import { buildProductAccessPayload } from "./lib/e2p";
 
 ensureWebSocket();
 
