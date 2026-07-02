@@ -20,6 +20,8 @@ import {
   getE2pAccessToken,
   normalizeGatewayStatus,
   readTransactionId,
+  setGatewayLogSink,
+  type GatewayLogEntry,
 } from "./lib/e2p";
 
 ensureWebSocket();
@@ -70,6 +72,26 @@ async function run(event: any) {
 
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  setGatewayLogSink((entry: GatewayLogEntry) => {
+    // Fire-and-forget: never let logging slow down or break confirmation.
+    supabase
+      .from("payment_gateway_logs")
+      .insert({
+        sale_id: saleId,
+        gateway: "e2payments",
+        direction: entry.direction,
+        endpoint: entry.endpoint,
+        http_status: entry.httpStatus,
+        duration_ms: entry.durationMs,
+        ok: entry.ok,
+        error: entry.error ?? null,
+        response_body: entry.responseBody ?? null,
+      })
+      .then(({ error }) => {
+        if (error) console.error("[payment-confirm-background] failed to write gateway log", error);
+      });
   });
 
   // Only proceed if the sale is still pending — guards against duplicate

@@ -82,6 +82,25 @@ async function handleRequest(event: any) {
 
   const { action } = body;
 
+  // ── payment_gateway_logs ─────────────────────────────────────────────────────
+  // Admin-only diagnostic view of every E2Payments request/response, so
+  // real issues can be diagnosed with actual data instead of guesswork.
+  if (action === "payment_gateway_logs") {
+    const limit = Math.min(200, Math.max(1, Number(body.limit ?? 50)));
+    const saleId = (body.saleId || "").trim();
+
+    let q = db
+      .from("payment_gateway_logs")
+      .select("id, sale_id, gateway, direction, endpoint, http_status, duration_ms, ok, error, response_body, created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (saleId) q = q.eq("sale_id", saleId);
+
+    const { data, error } = await q;
+    if (error) return fail("Erro ao consultar logs: " + error.message, 500);
+    return ok({ success: true, logs: data ?? [] });
+  }
+
   // ── stats ────────────────────────────────────────────────────────────────────
   if (action === "stats") {
     const { data: rows } = await db.from("profiles").select("status, created_at");

@@ -16,6 +16,35 @@
 
 export const E2P_BASE_URL = "https://e2payments.explicador.co.mz";
 
+export interface GatewayLogEntry {
+  direction: "oauth_token" | "payment_request";
+  endpoint: string;
+  httpStatus: number;
+  durationMs: number;
+  ok: boolean;
+  error?: string;
+  responseBody?: string;
+}
+
+/**
+ * Fire-and-forget log sink, set once per invocation by the caller (which
+ * knows how to reach Supabase — this module deliberately doesn't import
+ * the Supabase client itself, to stay a pure gateway-protocol module).
+ * Logging must never add latency or ever throw into the payment flow.
+ */
+type LogSink = (entry: GatewayLogEntry) => void;
+let logSink: LogSink | null = null;
+export function setGatewayLogSink(sink: LogSink | null) {
+  logSink = sink;
+}
+function emitLog(entry: GatewayLogEntry) {
+  try {
+    logSink?.(entry);
+  } catch (e) {
+    console.error("[e2p] log sink threw", e);
+  }
+}
+
 const PAID_STATUSES = new Set(["paid", "approved", "success", "completed", "complete", "confirmed"]);
 const FAILED_STATUSES = new Set(["failed", "failure", "error", "cancelled", "canceled", "rejected", "refused", "declined"]);
 const EXPIRED_STATUSES = new Set(["expired", "timeout", "timed_out"]);
@@ -30,7 +59,9 @@ export async function getE2pAccessToken(clientId: string, clientSecret: string):
     return cached.value;
   }
 
-  const res = await fetch(`${E2P_BASE_URL}/oauth/token`, {
+  const endpoint = `${E2P_BASE_URL}/oauth/token`;
+  const startedAt = Date.now();
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
@@ -38,6 +69,17 @@ export async function getE2pAccessToken(clientId: string, clientSecret: string):
   const text = await res.text();
   let json: Record<string, unknown> | null = null;
   try { json = text ? JSON.parse(text) : null; } catch { /* noop */ }
+
+  emitLog({
+    direction: "oauth_token",
+    endpoint,
+    httpStatus: res.status,
+    durationMs: Date.now() - startedAt,
+    ok: res.ok && !!json?.access_token,
+    // Never log the token itself or the client_secret we sent.
+    responseBody: json?.access_token ? "{access_token: [redacted], ...}" : text?.slice(0, 500),
+  });
+
   if (!res.ok || !json?.access_token) {
     throw new Error(`Falha ao autenticar com E2Payments (HTTP ${res.status}).`);
   }
@@ -76,6 +118,7 @@ export async function callE2pGateway(params: {
   const controller = new AbortController();
   const timeoutMs = params.safetyNetTimeoutMs ?? 170_000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
 
   try {
     const res = await fetch(endpoint, {
@@ -99,11 +142,35 @@ export async function callE2pGateway(params: {
     const text = await res.text();
     let json: any = null;
     try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+    emitLog({
+      direction: "payment_request",
+      endpoint,
+      httpStatus: res.status,
+      durationMs: Date.now() - startedAt,
+      ok: res.ok,
+      responseBody: text?.slice(0, 1000),
+    });
     return { ok: res.ok, json, status: res.status, timedOut: false };
   } catch (e: any) {
     if (e?.name === "AbortError") {
+      emitLog({
+        direction: "payment_request",
+        endpoint,
+        httpStatus: 0,
+        durationMs: Date.now() - startedAt,
+        ok: false,
+        error: `timeout after ${timeoutMs}ms safety net`,
+      });
       return { ok: false, json: null, status: 0, timedOut: true };
     }
+    emitLog({
+      direction: "payment_request",
+      endpoint,
+      httpStatus: 0,
+      durationMs: Date.now() - startedAt,
+      ok: false,
+      error: e?.message || String(e),
+    });
     throw e;
   } finally {
     clearTimeout(timeoutId);
