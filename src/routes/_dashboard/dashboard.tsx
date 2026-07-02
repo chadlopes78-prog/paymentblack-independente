@@ -129,6 +129,13 @@ function DashboardPage() {
     },
     staleTime: 1000 * 15,
     retry: 1,
+    // Guaranteed fallback so a new sale always shows up here within a few
+    // seconds, even if the realtime subscription below never actually
+    // connects (e.g. the `sales` table isn't added to the
+    // supabase_realtime publication in this project — that's a migration
+    // that has to be run against the live database and can silently not
+    // be there). Cheap enough at 8s to feel live without hammering the DB.
+    refetchInterval: 8_000,
   });
 
   useEffect(() => {
