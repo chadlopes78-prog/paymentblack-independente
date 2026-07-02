@@ -460,12 +460,25 @@ async function handleRequest(event: any) {
         }),
       };
     } catch (e: any) {
+      // IMPORTANT DISTINCTION: this catch only runs for exceptions OTHER
+      // than the deliberate `timedOut` case above (which already returned
+      // early). Anything landing here — a bad client_id/client_secret, DNS
+      // failure, our own code throwing — happened BEFORE or independently
+      // of any real STK push reaching the customer, so there is no
+      // ambiguity about money having moved. Silently reporting these as
+      // "still processing" (as this used to do) hides real, fast,
+      // fixable errors behind an infinite spinner — which is exactly the
+      // "fica preso em processando" symptom. Surface it for real instead.
+      const errMsg = e?.message || String(e) || "Erro ao comunicar com o gateway E2Payments.";
       console.error("e2payment gateway error", e);
-      // Same principle: don't know the outcome, don't claim failure.
+      await supabase
+        .from("sales")
+        .update({ status: "failed", status_reason: errMsg.slice(0, 500) })
+        .eq("id", (sale as any).id);
       return {
         statusCode: 200,
         headers: CORS,
-        body: JSON.stringify({ success: true, saleId: (sale as any).id, transactionId: null }),
+        body: JSON.stringify({ success: false, saleId: (sale as any).id, error: errMsg }),
       };
     }
   }
