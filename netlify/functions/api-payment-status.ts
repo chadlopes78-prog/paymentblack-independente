@@ -15,6 +15,15 @@ const PAYMENT_SUCCESS_SELECT =
   "id, status, status_reason, created_at, payment_method, amount, customer_phone, transaction_id, payment_reference, products(id, access_link, delivery_link, support_phone, support_number, thank_you_button_text, thank_you_url)";
 
 export const handler = async (event: any) => {
+  try {
+    return await handleRequest(event);
+  } catch (e: any) {
+    console.error("api-payment-status unhandled error", e);
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: "Erro no servidor: " + (e?.message || String(e)) }) };
+  }
+};
+
+async function handleRequest(event: any) {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS, body: "" };
   }
@@ -135,4 +144,4 @@ export const handler = async (event: any) => {
         : null,
     }),
   };
-};
+}

@@ -31,13 +31,28 @@ function fail(msg: string, status = 400) {
 }
 
 export const handler = async (event: any) => {
+  try {
+    return await handleRequest(event);
+  } catch (e: any) {
+    console.error("api-admin unhandled error", e);
+    return fail("Erro no servidor: " + (e?.message || String(e)), 500);
+  }
+};
+
+async function handleRequest(event: any) {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: CORS, body: "" };
   if (event.httpMethod !== "POST") return fail("Method not allowed", 405);
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey     = process.env.SUPABASE_PUBLISHABLE_KEY || "";
+  const anonKey     = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
   if (!supabaseUrl || !serviceKey) return fail("Servidor não configurado.", 500);
+  if (!anonKey) {
+    return fail(
+      "Servidor não configurado: falta a variável de ambiente SUPABASE_PUBLISHABLE_KEY no Netlify.",
+      500,
+    );
+  }
 
   // ── Authenticate caller ──────────────────────────────────────────────────────
   const authHeader = event.headers?.authorization || event.headers?.Authorization || "";
@@ -155,4 +170,4 @@ export const handler = async (event: any) => {
   }
 
   return fail("Ação inválida.");
-};
+}

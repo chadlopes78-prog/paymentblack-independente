@@ -58,6 +58,15 @@ function readReference(payload: any): string | null {
 }
 
 export const handler = async (event: any) => {
+  try {
+    return await handleRequest(event);
+  } catch (e: any) {
+    console.error("api-payment-webhook unhandled error", e);
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: "Erro no servidor: " + (e?.message || String(e)) }) };
+  }
+};
+
+async function handleRequest(event: any) {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS, body: "" };
   }
@@ -133,4 +142,4 @@ export const handler = async (event: any) => {
   }
 
   return { statusCode: 200, headers: CORS, body: JSON.stringify({ received: true }) };
-};
+}

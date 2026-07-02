@@ -134,6 +134,19 @@ function readTransactionId(payload: any): string | null {
 }
 
 export const handler = async (event: any) => {
+  try {
+    return await handleRequest(event);
+  } catch (e: any) {
+    console.error("api-payment unhandled error", e);
+    return {
+      statusCode: 200,
+      headers: CORS,
+      body: JSON.stringify({ success: false, error: "Erro no servidor: " + (e?.message || String(e)) }),
+    };
+  }
+};
+
+async function handleRequest(event: any) {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS, body: "" };
   }
@@ -542,4 +555,4 @@ export const handler = async (event: any) => {
       transactionId: transactionId ? String(transactionId) : null,
     }),
   };
-};
+}
