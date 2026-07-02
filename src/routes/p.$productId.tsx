@@ -106,8 +106,11 @@ export const Route = createFileRoute("/p/$productId")({
   head: ({ loaderData }) => {
     const product = loaderData?.product;
     const baseLinks = [
-      // Warm TCP+TLS to the payment gateway BEFORE the user clicks "Pagar".
-      // Removes ~150–400 ms of handshake from the critical path on first click.
+      // NOTE: preconnect/dns-prefetch here only warms a BROWSER→domain
+      // connection. The actual gateway calls (PayFlax, E2Payments) happen
+      // server-side inside the Netlify Function, so hinting the browser
+      // does nothing for that leg — kept only for any client-side asset
+      // fetches that might target these hosts.
       { rel: "preconnect", href: "https://payflax.site" },
       { rel: "dns-prefetch", href: "https://payflax.site" },
     ];

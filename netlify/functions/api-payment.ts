@@ -61,8 +61,11 @@ async function callE2pGateway(params: {
   phone: string;
   reference: string;
   customerName: string;
+  // Optional: a token fetch already kicked off earlier (e.g. in parallel
+  // with the sale insert) so we don't pay for it sequentially here.
+  tokenPromise?: Promise<string>;
 }): Promise<{ ok: boolean; json: any; status: number }> {
-  const token = await getE2pAccessToken(params.clientId, params.clientSecret);
+  const token = await (params.tokenPromise ?? getE2pAccessToken(params.clientId, params.clientSecret));
   const endpoint =
     params.method === "mpesa"
       ? `${E2P_BASE_URL}/v1/c2b/mpesa-payment/${params.walletId}`
@@ -390,6 +393,14 @@ async function handleRequest(event: any) {
     };
   }
 
+  // Kick off the E2Payments OAuth token fetch now, in parallel with the sale
+  // insert below, instead of waiting for the insert to finish first. Saves
+  // a full sequential round-trip (~100-300ms) off the critical path before
+  // the STK push reaches the customer's phone. Errors are handled when the
+  // promise is actually awaited inside callE2pGateway.
+  const e2pTokenPromise = e2p ? getE2pAccessToken(e2p.clientId, e2p.clientSecret) : null;
+  if (e2pTokenPromise) e2pTokenPromise.catch(() => {});
+
   const finalTrafficPageId = (trafficRes as any).data?.id ?? null;
   const finalCustomerName = contactPhone
     ? `${String(customerName).trim()} (contacto: ${String(contactPhone).trim()})`
@@ -446,6 +457,7 @@ async function handleRequest(event: any) {
         phone: gatewayPhone,
         reference,
         customerName: finalCustomerName,
+        tokenPromise: e2pTokenPromise ?? undefined,
       });
 
       const gwStatus = normalizeGatewayStatus(gwJson, ok);
